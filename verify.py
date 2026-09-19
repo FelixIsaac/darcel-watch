@@ -288,10 +288,32 @@ def adjudicate_gemini(record, findings, texts, api_key):
         return None  # malformed JSON -> caller falls back to deterministic
 
 
+def actionable(findings):
+    """Findings a volunteer could actually rule on.
+
+    A field whose stored and live values are identical is not a discrepancy, no
+    matter what the adjudicator concluded - the model sometimes reasons about a
+    field (say, the phone) while the only gathered evidence is another (the
+    address), which used to produce 'change this address to itself'. Requiring a
+    real difference makes that impossible to emit.
+    """
+    out = []
+    for f in findings or []:
+        stored = str(f.get("stored") or "").strip()
+        live = str(f.get("live") or "").strip()
+        if not stored or not live or stored == live:
+            continue
+        if f.get("field") == "phone" and norm_phone(stored) == norm_phone(live):
+            continue  # same number, different formatting
+        out.append(f)
+    return out
+
+
 def build_change_request(record, findings, verdict):
     if verdict != "discrepancy":
         return None
-    bad = next((f for f in findings if f.get("match") is False), findings[0] if findings else None)
+    usable = actionable(findings)
+    bad = next((f for f in usable if f.get("match") is False), usable[0] if usable else None)
     if not bad:
         return None
     return {
@@ -347,10 +369,21 @@ def verify(record, api_key=None):
         result = adjudicate_deterministic(record, findings, texts, fetched)
     verdict, reason, confidence = result
 
+    # A "discrepancy" a volunteer cannot act on is not a discrepancy. If the
+    # adjudicator called one but no field actually differs, we abstain rather
+    # than send someone a review with nothing to decide.
+    usable = actionable(findings)
+    if verdict == "discrepancy" and not usable:
+        verdict = "abstain"
+        reason = ("Adjudicator flagged a problem but no gathered field actually "
+                  f"differs, so there is nothing to act on. Original note: {reason}")
+        confidence = min(confidence, 0.3)
+
+    shown = usable if verdict == "discrepancy" else findings
     return {
         "resource_id": rid, "name": name, "verdict": verdict, "reason": reason,
         "confidence": confidence, "fetched": fetched,
-        "fields": [{k: v for k, v in f.items() if k != "match"} for f in findings],
+        "fields": [{k: v for k, v in f.items() if k != "match"} for f in shown],
         "change_request": build_change_request(record, findings, verdict),
     }
 
