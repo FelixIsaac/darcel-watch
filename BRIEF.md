@@ -25,15 +25,37 @@ vetted by volunteers at monthly datathons — human hours they do not have enoug
 
 | Measurement | Result |
 |---|---|
-| Random resource IDs sampled | 160 |
-| Resolved to real records | 122 |
-| Marked `approved` (live to users right now) | 108 |
-| **Of those, never verified once (`verified_at: null`)** | **98** |
-| Median age of the 10 that carry a date | **2,837 days (~7.8 years)** |
+| Resource records sampled | 156 |
+| Marked `approved` (live to users right now) | 138 |
+| **Of those, never verified once (`verified_at: null`)** | **126** |
+| Remaining approved records that carry a verification date | 12 |
+| Median age of those 12 | **2,838 days (~7.8 years)** |
 | Verified within the past year | **0** |
-| Approved listings with a website we can check | 93 |
+| Approved listings with a website we can check | 120 |
 
-A later, larger run: 156 records, 138 approved, 126 never verified. Same picture.
+All 12 verification dates, in full — the entire verified history in the sample:
+
+```
+3002d  2018-07-01  FranDelJA Enrichment Center
+2998d  2018-07-05  Lawyers' Committee for Civil Rights of the SF Bay Area
+2978d  2018-07-25  HEP B Free - San Francisco
+2894d  2018-10-17  San Francisco Bay Area Theatre Company
+2894d  2018-10-17  San Francisco University High School
+2838d  2018-12-12  Civic Center Plaza
+2838d  2018-12-12  California Department of Social Services
+2838d  2018-12-12  10,000 Degrees
+2703d  2019-04-26  Epiphany Center
+2329d  2020-05-04  San Francisco Immigration Court
+2329d  2020-05-04  Italian Community Services
+2184d  2020-09-26  California Department of Vocational Rehabilitation
+```
+
+Every verification happened between July 2018 and September 2020. Nothing since.
+The repeated dates are single datathon sessions — you can see the volunteer
+batches in the timestamps.
+
+An earlier, smaller sample (122 records, 108 approved, 98 never verified,
+10 dated) gave the same picture. Reproduce either with `python3 run.py`.
 
 The gap is not discovery. It is **freshness**. A wrong shelter address at 9pm is
 worse than no answer at all.
