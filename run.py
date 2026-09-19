@@ -1,12 +1,17 @@
-"""Darcel Watch - end to end.
+"""SF Service Guide Watch - end to end.
 
   harvest -> triage -> verify -> adjudicate -> emit
 
-Writes out/results.json, which ui/index.html renders.
+Writes out/results.json (ui/index.html) and out/graph.json (ui/graph.html).
 Read-only against the SF Service Guide. We never POST to production.
 
-    python3 run.py                  # evidence-only mode
+    python3 run.py                  # evidence-only, in-memory graph
     GEMINI_API_KEY=... python3 run.py   # + Gemini adjudication
+
+The graph layer runs on FalkorDB when it is reachable AND the `falkordb`
+client is importable - which means the venv interpreter, not system python3:
+
+    .venv/bin/python run.py         # FalkorDB backend
 """
 
 import datetime as dt
@@ -28,6 +33,58 @@ CRITICAL = (
     "clinic", "mental", "crisis", "legal", "hygiene", "shower", "detox",
     "addiction", "recovery", "emergency", "domestic",
 )
+
+
+def graph_falkor_endpoint():
+    host = os.environ.get("FALKORDB_HOST", "localhost")
+    return f"{host}:{os.environ.get('FALKORDB_PORT', '6379')}"
+
+
+def memory_subgraph(g, focus, hops=2, cap=300, pinned=()):
+    """In-memory twin of graph_falkor.subgraph(), same contract.
+
+    Lives here rather than in graph.py so the zero-dependency fallback module
+    stays exactly as shipped.
+    """
+    dist, frontier = {f: 0 for f in focus if f in g.nodes}, list(focus)
+    for d in range(1, hops + 1):
+        nxt = []
+        for nid in frontier:
+            for nbr in g.neighbors(nid):
+                if nbr not in dist:
+                    dist[nbr] = d
+                    nxt.append(nbr)
+        frontier = nxt
+
+    order = list(dict.fromkeys(list(pinned) + sorted(dist, key=lambda n: (dist[n], n))))
+    keep = [n for n in order[:cap] if n in g.nodes]
+    truncated = len(order) > cap
+
+    # graph.py stores every edge both ways; re-orient to the FalkorDB model by
+    # keeping only the arc that points at the relationship's head kind.
+    HEAD = {"offers": "service", "in_category": "category",
+            "located_at": "address", "reachable_at": "phone"}
+    kept = set(keep)
+    edges = {
+        (a, b, rel)
+        for a in keep
+        for b, rel in g.adj[a]
+        if b in kept and g.nodes[b]["kind"] == HEAD[rel]
+    }
+
+    return {
+        "nodes": [
+            {
+                "id": n,
+                "kind": g.nodes[n]["kind"],
+                "label": g.nodes[n].get("name") or g.nodes[n].get("number")
+                or g.nodes[n].get("text") or n,
+            }
+            for n in keep
+        ],
+        "edges": [{"source": a, "target": b, "rel": rel} for a, b, rel in sorted(edges)],
+        "truncated": truncated,
+    }
 
 
 def age_days(ts):
@@ -96,8 +153,31 @@ def main():
     print(f"  {len(records)} records | never verified: {stats['never_verified']}"
           f"/{stats['approved']} approved")
 
-    g = G.build(records)
-    print(f"  graph: {len(g.nodes)} nodes")
+    # FalkorDB when it is reachable, the in-memory adjacency graph when it is
+    # not. Same model, same three queries, cross-checked identical - so the
+    # pipeline never hard-fails just because Docker is down.
+    graph_falkor, why = None, None
+    try:
+        import graph_falkor
+
+        g = graph_falkor.build(records)
+        GQ, backend, label = graph_falkor, "falkordb", "FalkorDB"
+    except ImportError as e:
+        # A missing dependency is not Docker being down. Saying so costs ten
+        # seconds of demo debugging; conflating them costs the demo.
+        graph_falkor = None
+        why = (f"falkordb client not installed ({e}) - run with "
+               ".venv/bin/python, or pip install -r requirements.txt")
+    except Exception as e:
+        graph_falkor = None
+        why = (f"FalkorDB unreachable at {graph_falkor_endpoint()} "
+               f"({type(e).__name__}: {e}) - is the container running?")
+
+    if graph_falkor is None:
+        g = G.build(records)
+        GQ, backend, label = G, "in-memory", "in-memory fallback"
+        print(f"  {why}")
+    print(f"  graph: {len(g.nodes)} nodes ({label})")
 
     ranked = sorted(records, key=triage_score, reverse=True)
     candidates = [r for r in ranked if triage_score(r) > 0][:budget]
@@ -112,7 +192,7 @@ def main():
     for v in verdicts:
         node = f"org:{v['resource_id']}"
         if v["verdict"] == "discrepancy":
-            radius = G.blast_radius(g, node) if node in g.nodes else {"size": 0}
+            radius = GQ.blast_radius(g, node) if node in g.nodes else {"size": 0}
             v["blast_radius"] = radius
             # Confidence alone is a bad rank. A wrong record that invalidates
             # twelve downstream services deserves a volunteer's attention first.
@@ -122,7 +202,7 @@ def main():
             abstained.append(v)
 
     seeds = [f"org:{v['resource_id']}" for v in queue if f"org:{v['resource_id']}" in g.nodes]
-    suspicion = G.propagate_staleness(g, seeds)
+    suspicion = GQ.propagate_staleness(g, seeds)
 
     queue.sort(key=lambda v: -v.get("priority", 0))
     stats.update(
@@ -132,6 +212,7 @@ def main():
         matched=sum(1 for v in verdicts if v["verdict"] == "match"),
         gemini=bool(api_key),
         downstream_suspect=len(suspicion),
+        graph_backend=backend,
     )
 
     OUT.mkdir(exist_ok=True)
@@ -141,15 +222,61 @@ def main():
         "stats": stats,
         "queue": queue,
         "abstained": abstained,
-        "contradictions": G.contradictions(g)[:15],
+        "contradictions": GQ.contradictions(g)[:15],
         "source": "https://askdarcel.org/api (public, read-only)",
     }
     (OUT / "results.json").write_text(json.dumps(payload, indent=1))
+
+    # --- out/graph.json, for ui/graph.html --------------------------------
+    # Focus: the top queue orgs, topped up from triage rank if the queue is
+    # short, so the visualiser always has something to draw.
+    focus = [f"org:{v['resource_id']}" for v in queue][:3]
+    for r in ranked:
+        if len(focus) >= 3:
+            break
+        nid = f"org:{r['id']}"
+        if nid not in focus and nid in g.nodes:
+            focus.append(nid)
+
+    contras = payload["contradictions"]
+    # Contradiction orgs are pinned past the cap: three listings sharing one
+    # switchboard is the picture worth keeping.
+    pinned = [o["id"] for c in contras for o in c["orgs"] if o["id"] in g.nodes]
+
+    sub = (graph_falkor.subgraph if backend == "falkordb" else memory_subgraph)(
+        g, focus, hops=2, cap=300, pinned=pinned
+    )
+
+    blast = {f: GQ.blast_radius(g, f) for f in focus if f in g.nodes}
+    suspect = set(suspicion) | {
+        n["id"] for b in blast.values() for n in b["services"] + b["co_located_orgs"]
+    }
+    for n in sub["nodes"]:
+        n["suspect"] = n["id"] in suspect
+
+    (OUT / "graph.json").write_text(json.dumps({
+        "backend": backend,
+        "generated_at": NOW.isoformat(),
+        "focus": focus,
+        "nodes": sub["nodes"],
+        "edges": sub["edges"],
+        "truncated": sub["truncated"],
+        "blast": {
+            f: [n["id"] for n in b["services"] + b["co_located_orgs"]]
+            for f, b in blast.items()
+        },
+        "contradictions": [
+            {"shared": c["shared"], "kind": c["kind"], "orgs": [o["id"] for o in c["orgs"]]}
+            for c in contras
+        ],
+    }, indent=1))
 
     print(f"\n  discrepancies {len(queue)} | abstained {len(abstained)} "
           f"| matched {stats['matched']}")
     print(f"  {len(payload['contradictions'])} shared phone/address contradictions")
     print(f"  -> {OUT/'results.json'}")
+    print(f"  -> {OUT/'graph.json'} ({len(sub['nodes'])} nodes, "
+          f"{len(sub['edges'])} edges{', truncated' if sub['truncated'] else ''}, {backend})")
     print("\n  python3 -m http.server 8000  then open ui/index.html")
 
 

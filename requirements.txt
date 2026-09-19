@@ -1,0 +1,8 @@
+# Optional. The pipeline runs on the standard library alone (graph.py).
+# Install only to use the FalkorDB graph backend (graph_falkor.py):
+#
+#   docker run -d --name falkordb -p 6379:6379 falkordb/falkordb:latest
+#   python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+#
+# Without it, run.py falls back to the in-memory graph automatically.
+falkordb>=1.0.9

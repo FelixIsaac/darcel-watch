@@ -99,6 +99,20 @@ def call_model(prompt, api_key):
         return None
 
 
+# The public listing a volunteer would actually look at and edit. Route shapes
+# confirmed against ShelterTechSF/askdarcel-web: path="/organizations/:id" and
+# path="/organizations/:id/edit".
+SERVICE_GUIDE = "https://www.sfserviceguide.org"
+
+
+def listing_url(rid):
+    return f"{SERVICE_GUIDE}/organizations/{rid}" if rid else None
+
+
+def listing_edit_url(rid):
+    return f"{SERVICE_GUIDE}/organizations/{rid}/edit" if rid else None
+
+
 def norm_phone(p):
     """Last 10 digits - area code + number, ignores formatting/country code."""
     d = re.sub(r"\D+", "", p or "")
@@ -319,6 +333,8 @@ def build_change_request(record, findings, verdict):
     return {
         "resource_id": record.get("id"),
         "field": bad["field"],
+        "listing_url": listing_url(record.get("id")),
+        "listing_edit_url": listing_edit_url(record.get("id")),
         "current": bad["stored"],
         "proposed": bad["live"],
         "source_url": bad["evidence_url"],
@@ -379,9 +395,18 @@ def verify(record, api_key=None):
                   f"differs, so there is nothing to act on. Original note: {reason}")
         confidence = min(confidence, 0.3)
 
-    shown = usable if verdict == "discrepancy" else findings
+    # Never show a reviewer a stored->live pair that is identical, whatever the
+    # verdict. "stored X / live X - please confirm" asks someone to decide
+    # nothing, and it reads as a bug because it is one. Abstentions keep only
+    # genuinely differing fields; if none differ, the reason text stands alone.
+    shown = usable
     return {
         "resource_id": rid, "name": name, "verdict": verdict, "reason": reason,
+        # Both sides of the comparison, so a reviewer can see what they are
+        # about to change as well as the evidence for changing it.
+        "listing_url": listing_url(rid),
+        "listing_edit_url": listing_edit_url(rid),
+        "org_website": website,
         "confidence": confidence, "fetched": fetched,
         "fields": [{k: v for k, v in f.items() if k != "match"} for f in shown],
         "change_request": build_change_request(record, findings, verdict),

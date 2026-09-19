@@ -30,6 +30,43 @@
     padding:0 0 60px 0;
   }
   a{color:var(--accent);}
+
+  /* Shared nav */
+  nav.app-nav{
+    display:flex;
+    gap:4px;
+    align-items:center;
+    padding:10px 24px;
+    border-bottom:1px solid var(--border);
+    background:#0e1116;
+    position:sticky;
+    top:0;
+    z-index:20;
+    flex-wrap:wrap;
+  }
+  nav.app-nav .brand{
+    font-weight:700;
+    font-size:14px;
+    letter-spacing:-0.01em;
+    margin-right:14px;
+    white-space:nowrap;
+  }
+  nav.app-nav a{
+    color:var(--muted);
+    text-decoration:none;
+    font-size:14px;
+    padding:6px 12px;
+    border-radius:8px;
+    border:1px solid transparent;
+  }
+  nav.app-nav a:hover{color:var(--text);background:var(--panel);}
+  nav.app-nav a[aria-current="page"]{
+    color:var(--text);
+    background:var(--panel2);
+    border-color:var(--border);
+    font-weight:600;
+  }
+
   header.top{
     padding:36px 24px 28px;
     border-bottom:1px solid var(--border);
@@ -329,6 +366,192 @@
     margin-bottom:20px;
   }
 
+  /* Framing copy */
+  .framing{
+    margin-top:14px;
+    max-width:78ch;
+    font-size:15px;
+    color:var(--text);
+  }
+  .framing strong{color:#fff;}
+  .framing .who{
+    display:block;
+    margin-top:6px;
+    color:var(--muted);
+  }
+
+  /* Run panel */
+  .run-panel{
+    margin-top:28px;
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:18px;
+  }
+  .run-controls{
+    display:flex;
+    gap:10px;
+    align-items:center;
+    flex-wrap:wrap;
+  }
+  .run-panel label{
+    font-size:14px;
+    color:var(--muted);
+  }
+  .run-panel select{
+    background:var(--panel2);
+    color:var(--text);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:8px 10px;
+    font-size:14px;
+  }
+  .run-btn{
+    background:var(--accent);
+    color:#0b0d10;
+    border:1px solid var(--accent);
+    border-radius:8px;
+    padding:9px 18px;
+    font-size:14px;
+    font-weight:700;
+    cursor:pointer;
+  }
+  .run-btn:disabled{
+    opacity:.55;
+    cursor:not-allowed;
+  }
+  .run-note{
+    margin-top:10px;
+    font-size:13px;
+    color:var(--muted);
+  }
+  .run-status{
+    margin-top:10px;
+    font-size:14px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .run-status.is-idle{color:var(--muted);}
+  .run-status.is-running{color:var(--amber);}
+  .run-status.is-ok{color:var(--green);}
+  .run-status.is-error{color:var(--red);}
+  .spinner{
+    width:12px;
+    height:12px;
+    border-radius:50%;
+    border:2px solid rgba(240,185,77,.3);
+    border-top-color:var(--amber);
+    animation:spin .8s linear infinite;
+    flex:0 0 auto;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+  @media (prefers-reduced-motion:reduce){
+    .spinner{animation:none;}
+  }
+  .run-log{
+    display:none;
+    margin-top:12px;
+    background:#0e1114;
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:12px;
+    max-height:300px;
+    overflow-y:auto;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:12px;
+    line-height:1.45;
+    color:#c8d0da;
+    white-space:pre-wrap;
+    word-break:break-word;
+  }
+  .run-log.visible{display:block;}
+  .run-log div{padding:1px 0;}
+  .run-log div.err{color:var(--red);}
+  .run-disabled-note{
+    margin-top:10px;
+    font-size:13px;
+    color:var(--muted);
+  }
+
+  /* Review progress strip */
+  .progress-strip{
+    margin-top:24px;
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:14px 18px;
+    display:flex;
+    align-items:center;
+    gap:18px;
+    flex-wrap:wrap;
+  }
+  .progress-strip .pg-title{
+    font-size:13px;
+    color:var(--muted);
+    text-transform:uppercase;
+    letter-spacing:.05em;
+  }
+  .pg-items{
+    display:flex;
+    gap:16px;
+    flex-wrap:wrap;
+  }
+  .pg-item{font-size:14px;color:var(--muted);}
+  .pg-item b{
+    color:var(--text);
+    font-size:17px;
+    font-weight:700;
+    margin-right:4px;
+  }
+  .pg-item.confirmed b{color:var(--green);}
+  .pg-item.rejected b{color:var(--red);}
+  .pg-item.skipped b{color:var(--amber);}
+  .pg-bar{
+    flex:1 1 180px;
+    height:8px;
+    border-radius:4px;
+    background:#242a32;
+    overflow:hidden;
+    min-width:120px;
+  }
+  .pg-fill{
+    height:100%;
+    background:var(--green);
+    border-radius:4px;
+  }
+  .pg-link{font-size:14px;white-space:nowrap;}
+
+  /* Graph backend badge */
+  .badge-row{
+    margin-top:14px;
+    display:flex;
+    gap:10px;
+    align-items:center;
+    flex-wrap:wrap;
+    font-size:13px;
+    color:var(--muted);
+  }
+  .backend-badge{
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    background:var(--panel2);
+    border:1px solid var(--border);
+    border-radius:20px;
+    padding:5px 12px;
+    font-size:13px;
+    color:var(--text);
+  }
+  .backend-badge .dot{
+    width:8px;
+    height:8px;
+    border-radius:50%;
+    background:var(--muted);
+  }
+  .backend-badge.live .dot{background:var(--green);}
+  .backend-badge.memory .dot{background:var(--amber);}
+
   @media (max-width:600px){
     .diff-row{
       grid-template-columns:1fr;
@@ -339,14 +562,29 @@
 </head>
 <body>
 
+<nav class="app-nav">
+  <span class="brand">SF Service Guide Watch</span>
+  <a href="/" aria-current="page">Dashboard</a>
+  <a href="/review">Review</a>
+  <a href="/graph">Graph</a>
+</nav>
+
 <header class="top">
   <h1>SF Service Guide Watch</h1>
   <p class="tagline">Keeping San Francisco's safety-net directory true.</p>
-  <p class="source-note">Auditing the SF Service Guide (sfserviceguide.org, run by nonprofit ShelterTech) — re-verifying listings against live org websites and surfacing a review queue for volunteers.</p>
+  <p class="framing">
+    <strong>What this is:</strong> an agent that re-checks every listing in the SF Service Guide — the directory unhoused San Franciscans use to find food, shelter, clinics and legal aid — against each organisation's own live website, and says so when the stored details are wrong.
+    <span class="who"><strong>Who uses it:</strong> a ShelterTech volunteer, who reviews each finding and approves it by hand. The person it helps is someone looking for a meal tonight, who never sees this page. Nothing here is ever written to the live directory automatically.</span>
+  </p>
+  <p class="source-note">Source: sfserviceguide.org (nonprofit ShelterTech) — 1,759 organisations, 7,577 services, roughly 16,000 people a month.</p>
+  <div class="badge-row" id="badge-row"></div>
 </header>
 
 <main>
   <div id="demo-banner-slot"></div>
+
+  <div id="run-panel-slot"></div>
+  <div id="progress-slot"></div>
 
   <section id="stats-section">
     <h2>The state of the directory</h2>
@@ -383,7 +621,8 @@
     stats: {
       sampled: 122, approved: 108, never_verified: 98,
       median_verified_age_days: 2837, verified_last_year: 0,
-      checked: 122, discrepancies: 31, abstained: 14, matched: 77
+      checked: 122, discrepancies: 31, abstained: 14, matched: 77,
+      gemini: false, graph_backend: "in-memory"
     },
     queue: [
       {
@@ -428,9 +667,9 @@
         change_request: null
       }
     ],
-    abstained_examples: [
-      { resource_id: 7011, name: "Bayview Senior Services", reason: "Org website returned a soft-404; could not confirm current status without a false positive risk." },
-      { resource_id: 7204, name: "Mission Neighborhood Health Center - Annex", reason: "Conflicting hours found on two org-owned pages; insufficient confidence to pick one." }
+    abstained: [
+      { resource_id: 7011, name: "Bayview Senior Services", verdict: "abstain", reason: "Org website returned a soft-404; could not confirm current status without a false positive risk." },
+      { resource_id: 7204, name: "Mission Neighborhood Health Center - Annex", verdict: "abstain", reason: "Conflicting hours found on two org-owned pages; insufficient confidence to pick one." }
     ],
     contradictions: [
       { shared: "4154673700", kind: "phone", orgs: [{name:"Bayview Senior Services"},{name:"Bayview Hunters Point Foundation"}] },
@@ -487,11 +726,51 @@
     });
   }
 
+  // Real runs emit "abstain"; older/demo payloads use "abstained".
+  function normVerdict(v){
+    var s = (v === undefined || v === null) ? "unknown" : String(v).toLowerCase();
+    if(s === "abstain") return "abstained";
+    if(s === "match") return "matched";
+    return s;
+  }
+
+  function abstainedItems(data){
+    var out = [];
+    var seen = {};
+    function push(i){
+      if(!i || typeof i !== "object") return;
+      var key = (i.resource_id !== undefined && i.resource_id !== null) ? String(i.resource_id) : ("n:" + (i.name || out.length));
+      if(seen[key]) return;
+      seen[key] = true;
+      out.push(i);
+    }
+    if(data && Array.isArray(data.queue)){
+      data.queue.forEach(function(i){ if(normVerdict(i && i.verdict) === "abstained") push(i); });
+    }
+    if(data && Array.isArray(data.abstained)) data.abstained.forEach(push);
+    // legacy key kept for older payloads
+    if(data && Array.isArray(data.abstained_examples)) data.abstained_examples.forEach(push);
+    return out;
+  }
+
   function confidenceColor(conf){
     if(typeof conf !== "number") return "var(--muted)";
     if(conf >= 0.75) return "var(--green)";
     if(conf >= 0.45) return "var(--amber)";
     return "var(--red)";
+  }
+
+  // A stored->live row is only meaningful when the two values actually differ.
+  // Never render an "identical diff" no matter what the JSON claims.
+  function normVal(v){
+    if(v === undefined || v === null) return "";
+    return String(v).replace(/\s+/g," ").trim().toLowerCase();
+  }
+  function isRealDiff(f){
+    if(!f || typeof f !== "object") return false;
+    var a = normVal(f.stored), b = normVal(f.live);
+    if(!a && !b) return false;
+    return a !== b;
   }
 
   function renderDiffRow(f){
@@ -508,7 +787,7 @@
     var title = el("h3", "card-title", esc(item.name || "Unnamed organization"));
     head.appendChild(title);
 
-    var verdict = item.verdict || "unknown";
+    var verdict = normVerdict(item.verdict);
     var badgeClass = "verdict-other";
     if(verdict === "discrepancy") badgeClass = "verdict-discrepancy";
     else if(verdict === "matched") badgeClass = "verdict-matched";
@@ -535,9 +814,10 @@
       card.appendChild(cw);
     }
 
-    if(Array.isArray(item.fields) && item.fields.length){
+    var diffFields = (Array.isArray(item.fields) ? item.fields : []).filter(isRealDiff);
+    if(diffFields.length){
       var diffWrap = el("div", "diff-wrap");
-      item.fields.forEach(function(f){
+      diffFields.forEach(function(f){
         diffWrap.appendChild(renderDiffRow(f));
         if(f.evidence_quote){
           var bq = el("blockquote", "evidence");
@@ -592,7 +872,7 @@
     list.innerHTML = "";
     var filtered = currentQueue.filter(function(item){
       if(currentFilter === "all") return true;
-      return item.verdict === currentFilter;
+      return normVerdict(item && item.verdict) === currentFilter;
     });
     if(!filtered.length){
       list.appendChild(el("div", "empty-note", "No items match this filter."));
@@ -603,17 +883,36 @@
     });
   }
 
-  function setupFilters(queue){
-    currentQueue = Array.isArray(queue) ? queue.slice() : [];
-    var buttons = document.querySelectorAll(".filter-btn");
-    buttons.forEach(function(btn){
-      btn.addEventListener("click", function(){
-        buttons.forEach(function(b){ b.classList.remove("active"); });
-        btn.classList.add("active");
-        currentFilter = btn.getAttribute("data-filter");
-        renderQueue();
-      });
+  var filtersBound = false;
+
+  function setupFilters(data){
+    var queue = (data && Array.isArray(data.queue)) ? data.queue.slice() : [];
+    // Surface abstentions in the queue too, so the "Abstained" filter is never empty
+    // when the backend reports them in a separate array.
+    var seen = {};
+    queue.forEach(function(i){
+      if(i && i.resource_id !== undefined && i.resource_id !== null) seen[String(i.resource_id)] = true;
     });
+    abstainedItems(data).forEach(function(i){
+      var key = (i && i.resource_id !== undefined && i.resource_id !== null) ? String(i.resource_id) : null;
+      if(key && seen[key]) return;
+      if(key) seen[key] = true;
+      queue.push(i);
+    });
+    currentQueue = queue;
+
+    if(!filtersBound){
+      filtersBound = true;
+      var buttons = document.querySelectorAll(".filter-btn");
+      Array.prototype.forEach.call(buttons, function(btn){
+        btn.addEventListener("click", function(){
+          Array.prototype.forEach.call(buttons, function(b){ b.classList.remove("active"); });
+          btn.classList.add("active");
+          currentFilter = btn.getAttribute("data-filter");
+          renderQueue();
+        });
+      });
+    }
     renderQueue();
   }
 
@@ -625,12 +924,7 @@
       "The agent declined to judge these. Abstention is a feature: a wrong shelter address at 9pm is worse than no answer.");
     list.appendChild(caption);
 
-    var abstainedFromQueue = (data && Array.isArray(data.queue))
-      ? data.queue.filter(function(i){ return i.verdict === "abstained"; })
-      : [];
-    var explicit = (data && Array.isArray(data.abstained_examples)) ? data.abstained_examples : [];
-
-    var items = abstainedFromQueue.length ? abstainedFromQueue : explicit;
+    var items = abstainedItems(data);
 
     if(!items.length){
       list.appendChild(el("div", "empty-note", "No abstentions recorded in this run."));
@@ -668,32 +962,385 @@
     });
   }
 
-  function render(data, isDemo){
-    if(isDemo){
-      var slot = document.getElementById("demo-banner-slot");
-      slot.innerHTML = "";
-      slot.appendChild(el("div", "demo-banner",
-        "Showing demo data — live results.json could not be loaded."));
-    }
-    try{ renderStats(data); }catch(e){ console.error("stats render failed", e); }
-    try{ setupFilters(data && data.queue); }catch(e){ console.error("queue render failed", e); }
-    try{ renderAbstained(data); }catch(e){ console.error("abstained render failed", e); }
-    try{ renderContradictions(data); }catch(e){ console.error("contradictions render failed", e); }
+  function renderBackendBadge(data){
+    var row = document.getElementById("badge-row");
+    if(!row) return;
+    row.innerHTML = "";
+    var s = (data && data.stats) || {};
+    var backend = s.graph_backend;
+    if(backend === undefined || backend === null || backend === "") return;
+
+    backend = String(backend);
+    var isFalkor = backend.toLowerCase().indexOf("falkor") !== -1;
+    var badge = el("span", "backend-badge " + (isFalkor ? "live" : "memory"));
+    badge.appendChild(el("span", "dot"));
+    badge.appendChild(document.createTextNode(
+      isFalkor ? "Graph backend: FalkorDB" : "Graph backend: in-memory"));
+    row.appendChild(badge);
+
+    var link = document.createElement("a");
+    link.href = "/graph";
+    link.textContent = "Explore the graph →";
+    row.appendChild(link);
   }
 
-  function boot(){
-    fetch("../out/results.json")
+  /* ---------- Review progress strip ---------- */
+
+  function renderProgress(state){
+    var slot = document.getElementById("progress-slot");
+    if(!slot) return;
+    slot.innerHTML = "";
+    var counts = (state && state.counts) || null;
+    if(!counts || typeof counts !== "object") return;
+
+    function n(v){ return (typeof v === "number" && !isNaN(v)) ? v : 0; }
+    var confirmed = n(counts.confirmed), rejected = n(counts.rejected), skipped = n(counts.skipped);
+    var decided = confirmed + rejected + skipped;
+    var decisionCount = (state && state.decisions && typeof state.decisions === "object")
+      ? Object.keys(state.decisions).length : 0;
+    if(decided === 0 && decisionCount === 0 && n(counts.verified) === 0 && n(counts.flagged) === 0){
+      // Nothing reviewed yet — still worth showing the entry point.
+      decided = 0;
+    }
+
+    var total = Math.max(decided, currentQueue.length, decisionCount);
+    var strip = el("div", "progress-strip");
+    strip.appendChild(el("div", "pg-title", "Human review"));
+
+    var items = el("div", "pg-items");
+    function addItem(cls, value, label){
+      var d = el("div", "pg-item " + cls);
+      d.appendChild(el("b", "", esc(value)));
+      d.appendChild(document.createTextNode(label));
+      items.appendChild(d);
+    }
+    addItem("confirmed", confirmed, "confirmed");
+    addItem("rejected", rejected, "rejected");
+    addItem("skipped", skipped, "skipped");
+    if(typeof counts.flagged === "number") addItem("flagged", counts.flagged, "flagged");
+    strip.appendChild(items);
+
+    var bar = el("div", "pg-bar");
+    var fill = el("div", "pg-fill");
+    fill.style.width = (total > 0 ? Math.max(0, Math.min(100, (decided/total)*100)) : 0) + "%";
+    bar.appendChild(fill);
+    strip.appendChild(bar);
+
+    var link = document.createElement("a");
+    link.className = "pg-link";
+    link.href = "/review";
+    link.textContent = total > 0
+      ? (decided + " of " + total + " cleared — continue reviewing →")
+      : "Start reviewing →";
+    strip.appendChild(link);
+
+    slot.appendChild(strip);
+  }
+
+  function loadProgress(){
+    if(typeof fetch !== "function") return;
+    fetch("/api/state")
       .then(function(res){
         if(!res.ok) throw new Error("bad status " + res.status);
         return res.json();
       })
-      .then(function(data){
-        render(data, false);
+      .then(function(state){
+        try{ renderProgress(state); }catch(e){ console.warn("progress render failed", e); }
       })
       .catch(function(err){
-        console.warn("Falling back to DEMO_DATA:", err);
-        render(DEMO_DATA, true);
+        console.info("Review progress unavailable:", err && err.message);
+        var slot = document.getElementById("progress-slot");
+        if(slot) slot.innerHTML = "";
       });
+  }
+
+  /* ---------- Run audit control ---------- */
+
+  var MAX_LOG_LINES = 400;
+  var runEls = null;
+  var running = false;
+  var activeStream = null;
+
+  function buildRunPanel(){
+    var slot = document.getElementById("run-panel-slot");
+    if(!slot) return null;
+    slot.innerHTML = "";
+
+    var panel = el("div", "run-panel");
+    var controls = el("div", "run-controls");
+
+    var label = document.createElement("label");
+    label.setAttribute("for", "budget-select");
+    label.textContent = "Check";
+    controls.appendChild(label);
+
+    var select = document.createElement("select");
+    select.id = "budget-select";
+    [5, 10, 25].forEach(function(v){
+      var opt = document.createElement("option");
+      opt.value = String(v);
+      opt.textContent = v + " listings";
+      if(v === 5) opt.selected = true;
+      select.appendChild(opt);
+    });
+    controls.appendChild(select);
+
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "run-btn";
+    btn.id = "run-btn";
+    btn.textContent = "Run audit";
+    controls.appendChild(btn);
+
+    panel.appendChild(controls);
+    panel.appendChild(el("p", "run-note",
+      "This really goes out and fetches each organisation's website. A run of 5 takes roughly 30 seconds; 25 takes a few minutes. The numbers below refresh when it finishes."));
+
+    var status = el("div", "run-status is-idle", "Idle.");
+    status.id = "run-status";
+    panel.appendChild(status);
+
+    var log = el("div", "run-log");
+    log.id = "run-log";
+    log.setAttribute("aria-live", "polite");
+    panel.appendChild(log);
+
+    slot.appendChild(panel);
+    return { panel: panel, select: select, btn: btn, status: status, log: log };
+  }
+
+  function setStatus(text, cls, spin){
+    if(!runEls) return;
+    runEls.status.className = "run-status " + cls;
+    runEls.status.innerHTML = "";
+    if(spin) runEls.status.appendChild(el("span", "spinner"));
+    runEls.status.appendChild(document.createTextNode(text));
+  }
+
+  function logLine(text, isErr){
+    if(!runEls) return;
+    var log = runEls.log;
+    if(!log.classList.contains("visible")) log.classList.add("visible");
+    var line = el("div", isErr ? "err" : "");
+    line.textContent = text;
+    log.appendChild(line);
+    while(log.childNodes.length > MAX_LOG_LINES){
+      log.removeChild(log.firstChild);
+    }
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function closeStream(){
+    if(activeStream){
+      try{ activeStream.close(); }catch(e){}
+      activeStream = null;
+    }
+  }
+
+  function endRun(){
+    running = false;
+    if(runEls){
+      runEls.btn.disabled = false;
+      runEls.select.disabled = false;
+      runEls.btn.textContent = "Run audit";
+    }
+    closeStream();
+  }
+
+  // Stream payloads may be raw text or JSON; pull out something printable either way.
+  function extractLine(raw){
+    if(raw === undefined || raw === null) return { text: "" };
+    var text = String(raw);
+    if(!text) return { text: "" };
+    var parsed = null;
+    if(text.charAt(0) === "{"){
+      try{ parsed = JSON.parse(text); }catch(e){ parsed = null; }
+    }
+    if(parsed && typeof parsed === "object"){
+      var msg = parsed.line;
+      if(msg === undefined) msg = parsed.msg;
+      if(msg === undefined) msg = parsed.message;
+      if(msg === undefined) msg = parsed.text;
+      if(msg === undefined && parsed.done === undefined){
+        try{ msg = JSON.stringify(parsed); }catch(e){ msg = text; }
+      }
+      return {
+        text: (msg === undefined || msg === null) ? "" : String(msg),
+        done: parsed.done === true,
+        ok: parsed.ok,
+        error: parsed.error
+      };
+    }
+    return { text: text };
+  }
+
+  function finishRun(ok, errMsg){
+    if(ok === false){
+      setStatus("Run failed" + (errMsg ? ": " + errMsg : "."), "is-error", false);
+      logLine("Run failed" + (errMsg ? ": " + errMsg : ""), true);
+      endRun();
+      return;
+    }
+    setStatus("Run complete — refreshing results…", "is-ok", false);
+    closeStream();
+    loadResults()
+      .then(function(res){
+        render(res.data, res.isDemo);
+        loadProgress();
+        setStatus("Run complete. Results updated.", "is-ok", false);
+      })
+      .catch(function(e){
+        setStatus("Run complete, but results could not be reloaded.", "is-error", false);
+        console.warn(e);
+      })
+      .then(function(){ endRun(); }, function(){ endRun(); });
+  }
+
+  function startRun(){
+    if(running || !runEls) return;
+    var budget = parseInt(runEls.select.value, 10);
+    if(isNaN(budget) || budget <= 0) budget = 5;
+
+    running = true;
+    runEls.btn.disabled = true;
+    runEls.select.disabled = true;
+    runEls.btn.textContent = "Running…";
+    runEls.log.classList.add("visible");
+    runEls.log.innerHTML = "";
+    setStatus("Starting run (budget " + budget + ")… roughly 30s at budget 5.", "is-running", true);
+    logLine("→ POST /api/run {\"budget\":" + budget + "}");
+
+    fetch("/api/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ budget: budget })
+    })
+      .then(function(res){
+        if(!res.ok) throw new Error("POST /api/run returned " + res.status);
+        setStatus("Agent is checking live websites…", "is-running", true);
+        openStream();
+      })
+      .catch(function(err){
+        finishRun(false, (err && err.message) || "could not start run");
+      });
+  }
+
+  function openStream(){
+    if(typeof EventSource !== "function"){
+      finishRun(false, "this browser has no EventSource support");
+      return;
+    }
+    var es;
+    try{
+      es = new EventSource("/api/run/stream");
+    }catch(e){
+      finishRun(false, "could not open the log stream");
+      return;
+    }
+    activeStream = es;
+
+    es.onmessage = function(ev){
+      var info = extractLine(ev && ev.data);
+      if(info.text) logLine(info.text);
+      if(info.done){
+        finishRun(info.ok !== false, info.error ? String(info.error) : "");
+      }
+    };
+    es.onerror = function(){
+      // EventSource retries silently; if we are still mid-run treat a hard close as failure.
+      if(!running) { closeStream(); return; }
+      if(es.readyState === 2){
+        finishRun(false, "log stream closed unexpectedly");
+      }
+    };
+  }
+
+  function disableRunPanel(reason){
+    var slot = document.getElementById("run-panel-slot");
+    if(!slot) return;
+    slot.innerHTML = "";
+    runEls = null;
+    var panel = el("div", "run-panel");
+    panel.appendChild(el("div", "run-disabled-note",
+      "Live audit runs are unavailable here — " + esc(reason) +
+      ". This page is showing the results of the last recorded run."));
+    slot.appendChild(panel);
+  }
+
+  function setupRunControl(apiAvailable){
+    if(!apiAvailable){
+      disableRunPanel("no app server is attached (static report mode)");
+      return;
+    }
+    if(typeof EventSource !== "function"){
+      disableRunPanel("this browser does not support server-sent events");
+      return;
+    }
+    runEls = buildRunPanel();
+    if(!runEls) return;
+    runEls.btn.addEventListener("click", startRun);
+  }
+
+  /* ---------- Rendering + data loading ---------- */
+
+  function render(data, isDemo){
+    var slot = document.getElementById("demo-banner-slot");
+    if(slot){
+      slot.innerHTML = "";
+      if(isDemo){
+        slot.appendChild(el("div", "demo-banner",
+          "Showing demo data — live results.json could not be loaded."));
+      }
+    }
+    try{ renderStats(data); }catch(e){ console.error("stats render failed", e); }
+    try{ renderBackendBadge(data); }catch(e){ console.error("badge render failed", e); }
+    try{ setupFilters(data); }catch(e){ console.error("queue render failed", e); }
+    try{ renderAbstained(data); }catch(e){ console.error("abstained render failed", e); }
+    try{ renderContradictions(data); }catch(e){ console.error("contradictions render failed", e); }
+  }
+
+  function getJSON(url){
+    return fetch(url).then(function(res){
+      if(!res.ok) throw new Error(url + " -> " + res.status);
+      return res.json();
+    });
+  }
+
+  // Three layers: app server API, the static results file, then bundled demo data.
+  // The page must never render blank.
+  function loadResults(){
+    return getJSON("/api/results")
+      .then(function(data){
+        return { data: data, isDemo: false, api: true };
+      })
+      .catch(function(e1){
+        console.info("/api/results unavailable:", e1 && e1.message);
+        return getJSON("../out/results.json")
+          .then(function(data){
+            return { data: data, isDemo: false, api: false };
+          })
+          .catch(function(e2){
+            console.warn("Falling back to DEMO_DATA:", e2 && e2.message);
+            return { data: DEMO_DATA, isDemo: true, api: false };
+          });
+      });
+  }
+
+  function boot(){
+    if(typeof fetch !== "function"){
+      render(DEMO_DATA, true);
+      setupRunControl(false);
+      return;
+    }
+    loadResults().then(function(res){
+      render(res.data, res.isDemo);
+      setupRunControl(res.api);
+      if(res.api) loadProgress();
+    }).catch(function(err){
+      console.error("boot failed", err);
+      render(DEMO_DATA, true);
+      setupRunControl(false);
+    });
   }
 
   if(document.readyState === "loading"){
