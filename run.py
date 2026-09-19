@@ -82,7 +82,8 @@ def triage_score(record):
 
 def main():
     budget = int(os.environ.get("BUDGET", 25))
-    api_key = os.environ.get("GEMINI_API_KEY")
+    # Gemini 2.5 Flash either way - OpenRouter is just the transport.
+    api_key = os.environ.get("OPENROUTER_API_KEY") or os.environ.get("GEMINI_API_KEY")
 
     print("harvesting (read-only, cached)...")
     records = harvest.harvest(int(os.environ.get("N", 200)))

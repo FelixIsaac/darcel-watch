@@ -31,10 +31,72 @@ TAG_RE = re.compile(r"<(script|style)[^>]*>.*?</\1>", re.S | re.I)
 STRIP_RE = re.compile(r"<[^>]+>")
 WS_RE = re.compile(r"\s+")
 
-GEMINI_URL = (
+# Adjudication runs on Gemini 2.5 Flash. Two transports, same model:
+#   - OpenRouter (default when the key looks like sk-or-...), OpenAI-shaped API
+#   - Google AI Studio direct, when given a Google key
+# Set DW_MODEL to override the model slug on either transport.
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_MODEL = os.environ.get("DW_MODEL", "google/gemini-2.5-flash")
+
+GOOGLE_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
-    "gemini-2.5-flash:generateContent?key={key}"
+    "{model}:generateContent?key={key}"
 )
+GOOGLE_MODEL = os.environ.get("DW_MODEL", "gemini-2.5-flash")
+
+
+def _transport(api_key):
+    """OpenRouter keys are sk-or-...; anything else is treated as a Google key."""
+    return "openrouter" if (api_key or "").startswith("sk-or-") else "google"
+
+
+def _post_json(url, body, headers, timeout=20):
+    req = urllib.request.Request(
+        url, data=json.dumps(body).encode(), headers=headers, method="POST"
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.load(r)
+
+
+def call_model(prompt, api_key):
+    """Returns the model's raw text, or None on any failure.
+
+    Never raises. A dead key, a quota wall or a flaky venue hotspot must
+    degrade to the deterministic path, not take down the run.
+    """
+    try:
+        if _transport(api_key) == "openrouter":
+            resp = _post_json(
+                OPENROUTER_URL,
+                {
+                    "model": OPENROUTER_MODEL,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "response_format": {"type": "json_object"},
+                    "temperature": 0,
+                },
+                {
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://github.com/FelixIsaac/darcel-watch",
+                    "X-Title": "Darcel Watch",
+                },
+            )
+            return resp["choices"][0]["message"]["content"]
+
+        resp = _post_json(
+            GOOGLE_URL.format(model=GOOGLE_MODEL, key=api_key),
+            {
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {
+                    "responseMimeType": "application/json",
+                    "temperature": 0,
+                },
+            },
+            {"Content-Type": "application/json"},
+        )
+        return resp["candidates"][0]["content"]["parts"][0]["text"]
+    except Exception:
+        return None
 
 
 def norm_phone(p):
@@ -197,25 +259,17 @@ def adjudicate_gemini(record, findings, texts, api_key):
         f"Stored address: {record.get('addresses')}\n\n"
         f"Evidence found on live site:\n{evidence_lines}"
     )
-    body = json.dumps({
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"responseMimeType": "application/json", "temperature": 0},
-    }).encode()
-    req = urllib.request.Request(
-        GEMINI_URL.format(key=api_key), data=body,
-        headers={"Content-Type": "application/json"}, method="POST",
-    )
+    text = call_model(prompt, api_key)
+    if not text:
+        return None
     try:
-        with urllib.request.urlopen(req, timeout=15) as r:
-            resp = json.load(r)
-        text = resp["candidates"][0]["content"]["parts"][0]["text"]
         parsed = json.loads(text)
         v = parsed.get("verdict")
         if v not in ("discrepancy", "match", "abstain"):
             return None
         return v, str(parsed.get("reason", "")), float(parsed.get("confidence", 0.5))
     except Exception:
-        return None  # any failure (network, parsing, quota) -> caller falls back
+        return None  # malformed JSON -> caller falls back to deterministic
 
 
 def build_change_request(record, findings, verdict):
@@ -304,6 +358,6 @@ if __name__ == "__main__":
         if isinstance(r, dict) and "id" in r:
             records.append(r)
 
-    key = os.environ.get("GEMINI_API_KEY")
+    key = os.environ.get("OPENROUTER_API_KEY") or os.environ.get("GEMINI_API_KEY")
     for result in verify_many(records, api_key=key):
         print(json.dumps(result, indent=2)[:2000])
