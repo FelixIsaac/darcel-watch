@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Darcel Watch</title>
+<style>
+  :root{
+    --bg:#0b0d10;
+    --panel:#14181d;
+    --panel2:#1b2027;
+    --border:#2a3038;
+    --text:#e8ecf1;
+    --muted:#9aa5b1;
+    --red:#ff6b6b;
+    --red-dim:#3a1f22;
+    --green:#5fd68a;
+    --green-dim:#1c2e22;
+    --amber:#f0b94d;
+    --accent:#6fa8ff;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:16px;
+    line-height:1.5;
+    padding:0 0 60px 0;
+  }
+  a{color:var(--accent);}
+  header.top{
+    padding:36px 24px 28px;
+    border-bottom:1px solid var(--border);
+    background:linear-gradient(180deg,#12151a,#0b0d10);
+  }
+  header.top h1{
+    margin:0 0 6px 0;
+    font-size:clamp(28px,5vw,42px);
+    letter-spacing:-0.02em;
+  }
+  header.top p.tagline{
+    margin:0;
+    color:var(--muted);
+    font-size:clamp(15px,2vw,18px);
+  }
+  .source-note{
+    margin-top:10px;
+    font-size:13px;
+    color:var(--muted);
+  }
+  main{
+    max-width:1100px;
+    margin:0 auto;
+    padding:0 24px;
+  }
+  section{
+    margin-top:40px;
+  }
+  h2{
+    font-size:clamp(20px,3vw,26px);
+    margin:0 0 14px 0;
+    letter-spacing:-0.01em;
+  }
+  h2 .sub{
+    display:block;
+    font-size:14px;
+    font-weight:400;
+    color:var(--muted);
+    margin-top:4px;
+  }
+
+  /* Stat tiles */
+  .stat-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+    gap:14px;
+  }
+  .stat-tile{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:20px 18px;
+  }
+  .stat-tile.hero{
+    grid-column:span 1;
+    border-color:#5a2a2a;
+    background:linear-gradient(180deg,#1a1213,#14181d);
+  }
+  .stat-number{
+    font-size:clamp(32px,5vw,48px);
+    font-weight:700;
+    line-height:1;
+    letter-spacing:-0.02em;
+  }
+  .stat-tile.hero .stat-number{color:var(--red);}
+  .stat-label{
+    margin-top:8px;
+    color:var(--muted);
+    font-size:14px;
+  }
+
+  /* Filter control */
+  .filter-row{
+    display:flex;
+    gap:8px;
+    margin-bottom:18px;
+    flex-wrap:wrap;
+  }
+  .filter-btn{
+    background:var(--panel);
+    border:1px solid var(--border);
+    color:var(--text);
+    padding:8px 16px;
+    border-radius:20px;
+    font-size:14px;
+    cursor:pointer;
+  }
+  .filter-btn.active{
+    background:var(--accent);
+    border-color:var(--accent);
+    color:#0b0d10;
+    font-weight:600;
+  }
+
+  /* Queue cards */
+  .card{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:20px;
+    margin-bottom:16px;
+    transition:transform .12s ease, border-color .12s ease;
+  }
+  .card:hover{
+    transform:translateY(-2px);
+    border-color:#3a4250;
+  }
+  .card-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:12px;
+    flex-wrap:wrap;
+  }
+  .card-title{
+    font-size:19px;
+    font-weight:600;
+    margin:0;
+  }
+  .verdict-badge{
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+    padding:4px 10px;
+    border-radius:6px;
+    font-weight:700;
+    white-space:nowrap;
+  }
+  .verdict-discrepancy{background:var(--red-dim);color:var(--red);}
+  .verdict-matched{background:var(--green-dim);color:var(--green);}
+  .verdict-abstained{background:#2a2620;color:var(--amber);}
+  .verdict-other{background:#20242b;color:var(--muted);}
+
+  .reason{
+    color:var(--muted);
+    margin:8px 0 14px 0;
+    font-size:15px;
+  }
+
+  .confidence-wrap{
+    margin:12px 0;
+  }
+  .confidence-label{
+    display:flex;
+    justify-content:space-between;
+    font-size:12px;
+    color:var(--muted);
+    margin-bottom:4px;
+  }
+  .confidence-bar{
+    height:8px;
+    border-radius:4px;
+    background:#242a32;
+    overflow:hidden;
+  }
+  .confidence-fill{
+    height:100%;
+    border-radius:4px;
+  }
+
+  .diff-row{
+    display:grid;
+    grid-template-columns:120px 1fr 1fr;
+    gap:10px;
+    align-items:start;
+    padding:10px 0;
+    border-top:1px solid var(--border);
+    font-size:14px;
+  }
+  .diff-row:first-of-type{border-top:none;}
+  .diff-field{
+    color:var(--muted);
+    font-weight:600;
+    text-transform:capitalize;
+    padding-top:2px;
+  }
+  .diff-stored, .diff-live{
+    padding:8px 10px;
+    border-radius:8px;
+    word-break:break-word;
+  }
+  .diff-stored{
+    background:var(--red-dim);
+    color:var(--red);
+    text-decoration:line-through;
+    text-decoration-color:rgba(255,107,107,.6);
+  }
+  .diff-live{
+    background:var(--green-dim);
+    color:var(--green);
+  }
+
+  blockquote.evidence{
+    margin:14px 0 0 0;
+    padding:10px 14px;
+    border-left:3px solid var(--accent);
+    background:var(--panel2);
+    color:var(--muted);
+    font-size:14px;
+    font-style:italic;
+    border-radius:0 8px 8px 0;
+  }
+  blockquote.evidence a{
+    display:inline-block;
+    margin-top:6px;
+    font-style:normal;
+    font-size:13px;
+  }
+
+  .blast-radius{
+    margin-top:14px;
+    font-size:14px;
+    color:var(--amber);
+  }
+
+  details.raw{
+    margin-top:14px;
+  }
+  details.raw summary{
+    cursor:pointer;
+    color:var(--muted);
+    font-size:13px;
+  }
+  details.raw pre{
+    background:#0e1114;
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:12px;
+    overflow-x:auto;
+    font-size:12px;
+    color:#c8d0da;
+    margin-top:8px;
+  }
+
+  /* Abstained section */
+  .abstain-caption{
+    color:var(--muted);
+    font-size:14px;
+    margin:-6px 0 16px 0;
+    max-width:70ch;
+  }
+  .abstain-card{
+    background:var(--panel);
+    border:1px solid #3a3320;
+    border-left:3px solid var(--amber);
+    border-radius:10px;
+    padding:16px 18px;
+    margin-bottom:12px;
+  }
+  .abstain-card .card-title{font-size:16px;}
+  .abstain-card .reason{margin:6px 0 0 0;color:var(--amber);}
+
+  /* Contradictions */
+  .contradiction-card{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:14px 18px;
+    margin-bottom:10px;
+    font-size:14px;
+  }
+  .contradiction-card .kind{
+    color:var(--muted);
+    text-transform:uppercase;
+    font-size:11px;
+    letter-spacing:.05em;
+  }
+  .contradiction-orgs{
+    margin-top:6px;
+  }
+  .contradiction-orgs span{
+    display:inline-block;
+    background:var(--panel2);
+    border:1px solid var(--border);
+    border-radius:6px;
+    padding:3px 9px;
+    margin:2px 4px 2px 0;
+    font-size:13px;
+  }
+
+  .empty-note{
+    color:var(--muted);
+    font-style:italic;
+    padding:20px;
+    text-align:center;
+    border:1px dashed var(--border);
+    border-radius:10px;
+  }
+
+  .demo-banner{
+    background:#2a2416;
+    border:1px solid #4a3f22;
+    color:var(--amber);
+    padding:10px 16px;
+    border-radius:8px;
+    font-size:13px;
+    margin-bottom:20px;
+  }
+
+  @media (max-width:600px){
+    .diff-row{
+      grid-template-columns:1fr;
+    }
+    .diff-field{padding-top:0;}
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1>Darcel Watch</h1>
+  <p class="tagline">Keeping San Francisco's safety-net directory true.</p>
+  <p class="source-note">Auditing the SF Service Guide (sfserviceguide.org, run by nonprofit ShelterTech) — re-verifying listings against live org websites and surfacing a review queue for volunteers.</p>
+</header>
+
+<main>
+  <div id="demo-banner-slot"></div>
+
+  <section id="stats-section">
+    <h2>The state of the directory</h2>
+    <div class="stat-grid" id="stat-grid"></div>
+  </section>
+
+  <section id="queue-section">
+    <h2>Review queue<span class="sub">Ranked by priority — what a volunteer should look at first.</span></h2>
+    <div class="filter-row" id="filter-row">
+      <button class="filter-btn active" data-filter="all">All</button>
+      <button class="filter-btn" data-filter="discrepancy">Discrepancies</button>
+      <button class="filter-btn" data-filter="abstained">Abstained</button>
+    </div>
+    <div id="queue-list"></div>
+  </section>
+
+  <section id="abstained-section">
+    <h2>Abstained<span class="sub">The agent declined to judge these. Abstention is a feature: a wrong shelter address at 9pm is worse than no answer.</span></h2>
+    <div id="abstained-list"></div>
+  </section>
+
+  <section id="contradictions-section">
+    <h2>Shared phone / address<span class="sub">Possible duplicate or merged organizations.</span></h2>
+    <div id="contradictions-list"></div>
+  </section>
+</main>
+
+<script>
+(function(){
+  "use strict";
+
+  var DEMO_DATA = {
+    corpus: { resources: 1759, services: 7577 },
+    stats: {
+      sampled: 122, approved: 108, never_verified: 98,
+      median_verified_age_days: 2837, verified_last_year: 0,
+      checked: 122, discrepancies: 31, abstained: 14, matched: 77
+    },
+    queue: [
+      {
+        resource_id: 4471, name: "Tenderloin Housing Clinic",
+        verdict: "discrepancy",
+        reason: "Listed hours no longer match the org's published schedule.",
+        confidence: 0.91, priority: 9.4,
+        fetched: ["https://thclinic.org/contact"],
+        fields: [
+          { field: "hours", stored: "Mon 8:25am-3:30pm", live: "Mon 9am-5pm",
+            evidence_url: "https://thclinic.org/contact",
+            evidence_quote: "Our office is open Monday through Friday, 9:00 AM to 5:00 PM." },
+          { field: "phone", stored: "(415) 495-5237", live: "(415) 495-5238",
+            evidence_url: "https://thclinic.org/contact",
+            evidence_quote: "Call us at (415) 495-5238 for intake." }
+        ],
+        blast_radius: { services: [{name:"Eviction Defense"},{name:"Tenant Counseling"},{name:"Legal Intake"}], co_located_orgs: [{name:"SF Tenants Union"}], size: 4 },
+        change_request: { resource_id: 4471, field: "hours", proposed: "Mon-Fri 9am-5pm", source: "https://thclinic.org/contact" }
+      },
+      {
+        resource_id: 5820, name: "St. Anthony's Dining Room",
+        verdict: "discrepancy",
+        reason: "Address stored is a former location; org relocated two blocks away.",
+        confidence: 0.86, priority: 8.7,
+        fetched: ["https://www.stanthonysf.org/locations"],
+        fields: [
+          { field: "address", stored: "121 Golden Gate Ave", live: "150 Golden Gate Ave",
+            evidence_url: "https://www.stanthonysf.org/locations",
+            evidence_quote: "Our Dining Room is now located at 150 Golden Gate Avenue." }
+        ],
+        blast_radius: { services: [{name:"Free Meals"},{name:"Senior Meal Program"}], co_located_orgs: [], size: 2 },
+        change_request: { resource_id: 5820, field: "address", proposed: "150 Golden Gate Ave", source: "https://www.stanthonysf.org/locations" }
+      },
+      {
+        resource_id: 6103, name: "Glide Foundation - Walk-In Services",
+        verdict: "matched",
+        reason: "Live site confirms stored hours and contact details.",
+        confidence: 0.97, priority: 1.2,
+        fetched: ["https://www.glide.org/services"],
+        fields: [],
+        blast_radius: { services: [{name:"Walk-In Counseling"}], co_located_orgs: [], size: 1 },
+        change_request: null
+      }
+    ],
+    abstained_examples: [
+      { resource_id: 7011, name: "Bayview Senior Services", reason: "Org website returned a soft-404; could not confirm current status without a false positive risk." },
+      { resource_id: 7204, name: "Mission Neighborhood Health Center - Annex", reason: "Conflicting hours found on two org-owned pages; insufficient confidence to pick one." }
+    ],
+    contradictions: [
+      { shared: "4154673700", kind: "phone", orgs: [{name:"Bayview Senior Services"},{name:"Bayview Hunters Point Foundation"}] },
+      { shared: "1385 Mission St", kind: "address", orgs: [{name:"SF Human Services Agency"},{name:"CityTestSF - Mission Site"}] }
+    ]
+  };
+
+  function esc(s){
+    if(s===undefined || s===null) return "";
+    return String(s)
+      .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+  }
+
+  function num(n, fallback){
+    return (typeof n === "number" && !isNaN(n)) ? n : (fallback !== undefined ? fallback : "—");
+  }
+
+  function fmtDays(days){
+    if(typeof days !== "number" || isNaN(days)) return "—";
+    var years = (days/365.25);
+    return years.toFixed(1) + " yrs";
+  }
+
+  function el(tag, cls, html){
+    var e = document.createElement(tag);
+    if(cls) e.className = cls;
+    if(html !== undefined) e.innerHTML = html;
+    return e;
+  }
+
+  function renderStats(data){
+    var grid = document.getElementById("stat-grid");
+    grid.innerHTML = "";
+    var s = (data && data.stats) || {};
+    var c = (data && data.corpus) || {};
+
+    var tiles = [
+      { hero:true, value: num(s.never_verified) + " / " + num(s.approved), label: "live listings NEVER verified against source" },
+      { hero:true, value: fmtDays(s.median_verified_age_days), label: "median time since last verification" },
+      { hero:true, value: num(s.verified_last_year, 0), label: "listings verified in the past year" },
+      { value: num(s.checked), label: "checked this run" },
+      { value: num(s.discrepancies), label: "discrepancies found" },
+      { value: num(s.abstained), label: "abstained (declined to judge)" },
+      { value: num(c.resources), label: "total organizations in directory" },
+      { value: num(c.services), label: "total services listed" }
+    ];
+
+    tiles.forEach(function(t){
+      var tile = el("div", "stat-tile" + (t.hero ? " hero" : ""));
+      tile.appendChild(el("div", "stat-number", esc(t.value)));
+      tile.appendChild(el("div", "stat-label", esc(t.label)));
+      grid.appendChild(tile);
+    });
+  }
+
+  function confidenceColor(conf){
+    if(typeof conf !== "number") return "var(--muted)";
+    if(conf >= 0.75) return "var(--green)";
+    if(conf >= 0.45) return "var(--amber)";
+    return "var(--red)";
+  }
+
+  function renderDiffRow(f){
+    var row = el("div", "diff-row");
+    row.appendChild(el("div", "diff-field", esc(f.field || "field")));
+    row.appendChild(el("div", "diff-stored", esc(f.stored !== undefined ? f.stored : "—")));
+    row.appendChild(el("div", "diff-live", esc(f.live !== undefined ? f.live : "—")));
+    return row;
+  }
+
+  function renderCard(item){
+    var card = el("div", "card");
+    var head = el("div", "card-head");
+    var title = el("h3", "card-title", esc(item.name || "Unnamed organization"));
+    head.appendChild(title);
+
+    var verdict = item.verdict || "unknown";
+    var badgeClass = "verdict-other";
+    if(verdict === "discrepancy") badgeClass = "verdict-discrepancy";
+    else if(verdict === "matched") badgeClass = "verdict-matched";
+    else if(verdict === "abstained") badgeClass = "verdict-abstained";
+    head.appendChild(el("span", "verdict-badge " + badgeClass, esc(verdict)));
+    card.appendChild(head);
+
+    if(item.reason){
+      card.appendChild(el("p", "reason", esc(item.reason)));
+    }
+
+    if(typeof item.confidence === "number"){
+      var cw = el("div", "confidence-wrap");
+      var lbl = el("div", "confidence-label");
+      lbl.appendChild(el("span", "", "Confidence"));
+      lbl.appendChild(el("span", "", (item.confidence*100).toFixed(0) + "%"));
+      cw.appendChild(lbl);
+      var bar = el("div", "confidence-bar");
+      var fill = el("div", "confidence-fill");
+      fill.style.width = Math.max(0, Math.min(100, item.confidence*100)) + "%";
+      fill.style.background = confidenceColor(item.confidence);
+      bar.appendChild(fill);
+      cw.appendChild(bar);
+      card.appendChild(cw);
+    }
+
+    if(Array.isArray(item.fields) && item.fields.length){
+      var diffWrap = el("div", "diff-wrap");
+      item.fields.forEach(function(f){
+        diffWrap.appendChild(renderDiffRow(f));
+        if(f.evidence_quote){
+          var bq = el("blockquote", "evidence");
+          bq.appendChild(document.createTextNode("“" + f.evidence_quote + "”"));
+          if(f.evidence_url){
+            bq.appendChild(document.createElement("br"));
+            var a = document.createElement("a");
+            a.href = f.evidence_url;
+            a.target = "_blank";
+            a.rel = "noopener noreferrer";
+            a.textContent = f.evidence_url;
+            bq.appendChild(a);
+          }
+          diffWrap.appendChild(bq);
+        }
+      });
+      card.appendChild(diffWrap);
+    }
+
+    if(item.blast_radius && typeof item.blast_radius.size === "number" && item.blast_radius.size > 0){
+      var services = (item.blast_radius.services || []).length;
+      var coloc = (item.blast_radius.co_located_orgs || []).length;
+      card.appendChild(el("div", "blast-radius",
+        "⚠ " + services + " downstream service" + (services===1?"":"s") +
+        " + " + coloc + " co-located org" + (coloc===1?"":"s") + " also suspect"));
+    }
+
+    if(item.change_request){
+      var det = document.createElement("details");
+      det.className = "raw";
+      var sum = document.createElement("summary");
+      sum.textContent = "Raw change request";
+      det.appendChild(sum);
+      var pre = document.createElement("pre");
+      try{
+        pre.textContent = JSON.stringify(item.change_request, null, 2);
+      }catch(e){
+        pre.textContent = "(unable to render)";
+      }
+      det.appendChild(pre);
+      card.appendChild(det);
+    }
+
+    return card;
+  }
+
+  var currentFilter = "all";
+  var currentQueue = [];
+
+  function renderQueue(){
+    var list = document.getElementById("queue-list");
+    list.innerHTML = "";
+    var filtered = currentQueue.filter(function(item){
+      if(currentFilter === "all") return true;
+      return item.verdict === currentFilter;
+    });
+    if(!filtered.length){
+      list.appendChild(el("div", "empty-note", "No items match this filter."));
+      return;
+    }
+    filtered.forEach(function(item){
+      list.appendChild(renderCard(item));
+    });
+  }
+
+  function setupFilters(queue){
+    currentQueue = Array.isArray(queue) ? queue.slice() : [];
+    var buttons = document.querySelectorAll(".filter-btn");
+    buttons.forEach(function(btn){
+      btn.addEventListener("click", function(){
+        buttons.forEach(function(b){ b.classList.remove("active"); });
+        btn.classList.add("active");
+        currentFilter = btn.getAttribute("data-filter");
+        renderQueue();
+      });
+    });
+    renderQueue();
+  }
+
+  function renderAbstained(data){
+    var list = document.getElementById("abstained-list");
+    list.innerHTML = "";
+
+    var caption = el("p", "abstain-caption",
+      "The agent declined to judge these. Abstention is a feature: a wrong shelter address at 9pm is worse than no answer.");
+    list.appendChild(caption);
+
+    var abstainedFromQueue = (data && Array.isArray(data.queue))
+      ? data.queue.filter(function(i){ return i.verdict === "abstained"; })
+      : [];
+    var explicit = (data && Array.isArray(data.abstained_examples)) ? data.abstained_examples : [];
+
+    var items = abstainedFromQueue.length ? abstainedFromQueue : explicit;
+
+    if(!items.length){
+      list.appendChild(el("div", "empty-note", "No abstentions recorded in this run."));
+      return;
+    }
+
+    items.forEach(function(item){
+      var card = el("div", "abstain-card");
+      card.appendChild(el("div", "card-title", esc(item.name || "Unnamed organization")));
+      card.appendChild(el("p", "reason", esc(item.reason || "No reason provided.")));
+      list.appendChild(card);
+    });
+  }
+
+  function renderContradictions(data){
+    var list = document.getElementById("contradictions-list");
+    list.innerHTML = "";
+    var items = (data && Array.isArray(data.contradictions)) ? data.contradictions : [];
+    if(!items.length){
+      list.appendChild(el("div", "empty-note", "No shared phone numbers or addresses detected."));
+      return;
+    }
+    items.forEach(function(c){
+      var card = el("div", "contradiction-card");
+      card.appendChild(el("div", "kind", esc(c.kind || "shared value")));
+      card.appendChild(document.createTextNode(esc(c.shared || "—")));
+      var orgsWrap = el("div", "contradiction-orgs");
+      (c.orgs || []).forEach(function(o){
+        var span = document.createElement("span");
+        span.textContent = o && o.name ? o.name : "Unknown org";
+        orgsWrap.appendChild(span);
+      });
+      card.appendChild(orgsWrap);
+      list.appendChild(card);
+    });
+  }
+
+  function render(data, isDemo){
+    if(isDemo){
+      var slot = document.getElementById("demo-banner-slot");
+      slot.innerHTML = "";
+      slot.appendChild(el("div", "demo-banner",
+        "Showing demo data — live results.json could not be loaded."));
+    }
+    try{ renderStats(data); }catch(e){ console.error("stats render failed", e); }
+    try{ setupFilters(data && data.queue); }catch(e){ console.error("queue render failed", e); }
+    try{ renderAbstained(data); }catch(e){ console.error("abstained render failed", e); }
+    try{ renderContradictions(data); }catch(e){ console.error("contradictions render failed", e); }
+  }
+
+  function boot(){
+    fetch("../out/results.json")
+      .then(function(res){
+        if(!res.ok) throw new Error("bad status " + res.status);
+        return res.json();
+      })
+      .then(function(data){
+        render(data, false);
+      })
+      .catch(function(err){
+        console.warn("Falling back to DEMO_DATA:", err);
+        render(DEMO_DATA, true);
+      });
+  }
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", boot);
+  } else {
+    boot();
+  }
+})();
+</script>
+
+</body>
+</html>
