@@ -1,4 +1,4 @@
-# Darcel Watch
+# SF Service Guide Watch
 
 Hack for Humanity: San Francisco — 19 Sep 2026, Entrepreneurs First, co-hosted by MLH, powered by Google Gemini.
 Built at a hackathon.
@@ -13,7 +13,7 @@ It's named for Darcel Jackson, who founded ShelterTech after being injured as a 
 
 ## What it does
 
-Darcel Watch is an agent that re-verifies SF Service Guide listings against each organisation's own live website, models the directory as a graph so a single closure propagates to everything connected to it, abstains when the evidence is weak, and emits a ranked change-request queue in the shape ShelterTech's own volunteers already work with. It never writes to their production system — every output is a candidate for a human to review.
+SF Service Guide Watch is an agent that re-verifies SF Service Guide listings against each organisation's own live website, models the directory as a graph so a single closure propagates to everything connected to it, abstains when the evidence is weak, and emits a ranked change-request queue in the shape ShelterTech's own volunteers already work with. It never writes to their production system — every output is a candidate for a human to review.
 
 We measured the problem before building the fix. Sample: 156 random resource IDs from the live, public, unauthenticated AskDarcel API. 138 of those are marked `approved` — live to users right now. Of those 138: **126 have never been verified once** (`verified_at: null`). The 12 that do carry a verification date were verified a median of **~2,838 days ago (~7.8 years)**. **Zero** were verified in the past year. 120 of the 138 list a website we can check against.
 

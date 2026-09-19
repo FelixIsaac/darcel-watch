@@ -7,7 +7,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node notify/spectrum.ts",
     "typecheck": "tsc --noEmit",
-    "review": "node notify/spectrum.ts"
+    "review": "node notify/spectrum.ts",
+    "web": "node notify/web.ts"
   },
   "repository": {
     "type": "git",

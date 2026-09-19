@@ -18,6 +18,9 @@
     // These two flags make the typechecker reject anything Node can't strip.
     "erasableSyntaxOnly": true,
     "verbatimModuleSyntax": true,
+    // Node resolves the real file on disk, so local imports must say `.ts`.
+    // Nothing is emitted, so there is no rewriting to worry about.
+    "allowImportingTsExtensions": true,
 
     "skipLibCheck": true,
     "noEmit": true

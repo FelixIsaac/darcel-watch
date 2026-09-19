@@ -13,7 +13,7 @@ import urllib.request
 
 API = "https://askdarcel.org/api"
 DATA = pathlib.Path(__file__).parent / "data"
-UA = {"User-Agent": "darcel-watch/0.1 (Hack for Humanity SF; read-only)"}
+UA = {"User-Agent": "sfsg-watch/0.1 (Hack for Humanity SF; read-only)"}
 
 
 def get(path, timeout=30):

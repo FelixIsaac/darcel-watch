@@ -15,7 +15,7 @@ import urllib.error
 import urllib.request
 
 DATA = pathlib.Path(__file__).parent / "data"
-UA = {"User-Agent": "darcel-watch/0.1 (Hack for Humanity SF; read-only)"}
+UA = {"User-Agent": "sfsg-watch/0.1 (Hack for Humanity SF; read-only)"}
 FETCH_TIMEOUT = 12
 MAX_FETCHES = 3
 # Sub-pages the agent tries, in order, when the homepage doesn't settle a question.
@@ -78,7 +78,7 @@ def call_model(prompt, api_key):
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
                     "HTTP-Referer": "https://github.com/FelixIsaac/darcel-watch",
-                    "X-Title": "Darcel Watch",
+                    "X-Title": "SF Service Guide Watch",
                 },
             )
             return resp["choices"][0]["message"]["content"]

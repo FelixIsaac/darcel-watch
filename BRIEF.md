@@ -1,4 +1,4 @@
-# Darcel Watch — full brief
+# SF Service Guide Watch — full brief
 
 Assume you know nothing about this project. This file tells you everything.
 
