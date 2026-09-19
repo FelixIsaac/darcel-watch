@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": ["node"],
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    // NOTE: exactOptionalPropertyTypes is deliberately OFF. spectrum-ts's own
+    // declarations (AnyPlatformDef.events, the provider config inputs) are not
+    // authored against it, so enabling it reports errors inside node_modules'
+    // types rather than in this code.
+
+    // Node 24 runs TypeScript by stripping types — it never rewrites syntax.
+    // These two flags make the typechecker reject anything Node can't strip.
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["notify/**/*.ts"]
+}

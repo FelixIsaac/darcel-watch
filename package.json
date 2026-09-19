@@ -1,0 +1,31 @@
+{
+  "name": "darcel-watch",
+  "version": "1.0.0",
+  "description": "Named for Darcel Jackson, who founded ShelterTech after being injured as a welder in San Francisco and becoming unhoused. ShelterTech built the SF Service Guide so the next person in that situation could find help. Darcel Watch exists to keep that guide accurate.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node notify/spectrum.ts",
+    "typecheck": "tsc --noEmit",
+    "review": "node notify/spectrum.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FelixIsaac/darcel-watch.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/FelixIsaac/darcel-watch/issues"
+  },
+  "homepage": "https://github.com/FelixIsaac/darcel-watch#readme",
+  "dependencies": {
+    "spectrum-ts": "12.8.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.2",
+    "typescript": "7.0.2"
+  }
+}
