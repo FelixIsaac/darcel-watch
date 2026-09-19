@@ -249,11 +249,27 @@ def adjudicate_gemini(record, findings, texts, api_key):
     )
     prompt = (
         "You are auditing a nonprofit service directory listing against its live "
-        "website. Given the stored record and evidence quotes pulled from the site, "
-        'decide if there is a genuine discrepancy. Answer STRICT JSON only: '
-        '{"verdict": "discrepancy"|"match"|"abstain", "reason": "<one short sentence>", '
-        '"confidence": <0.0-1.0>}. Answer "abstain" if the quote does not clearly '
-        "settle the question (e.g. ambiguous, partial match, or JS-shell text).\n\n"
+        "website. A volunteer will act on your answer, and a wrong 'discrepancy' "
+        "wastes their time or, worse, replaces a working phone number with a "
+        "useless one. Be conservative.\n\n"
+        "The evidence below was gathered by a regex, which is dumb: it reports ANY "
+        "phone number it finds anywhere on the page. Your job is to judge whether "
+        "the stored value is actually WRONG.\n\n"
+        "Answer 'discrepancy' ONLY if the live value plainly replaces the stored "
+        "one for the same purpose - i.e. it is presented as this organisation's "
+        "main public contact, and the stored value is absent or contradicted.\n"
+        "Answer 'abstain' if the quote's context suggests the live number serves a "
+        "DIFFERENT purpose than the stored one - a careers or hiring line, fax, "
+        "donations, press, a specific department or clinic, a partner organisation, "
+        "or a second location. A page can legitimately list many numbers; that alone "
+        "is NOT a discrepancy.\n"
+        "Also abstain on: vanity numbers (e.g. '555-CARE' spelling out digits), "
+        "partial matches, extensions, JS-shell text, or anything ambiguous.\n"
+        "Answer 'match' if the evidence confirms the stored value.\n\n"
+        "Calibrate confidence honestly: reserve values above 0.9 for cases where "
+        "the page explicitly supersedes the stored value. Unsure means abstain.\n\n"
+        'Answer STRICT JSON only: {"verdict": "discrepancy"|"match"|"abstain", '
+        '"reason": "<one short sentence>", "confidence": <0.0-1.0>}\n\n'
         f"Org name: {record.get('name')}\n"
         f"Stored phone(s): {[p.get('number') for p in record.get('phones') or []]}\n"
         f"Stored address: {record.get('addresses')}\n\n"
