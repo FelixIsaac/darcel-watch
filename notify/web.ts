@@ -214,15 +214,23 @@ function recordedCounts(): Record<string, number> {
  */
 function queueBreakdown(): Record<string, number> {
   let discrepancies = 0;
+  let structural = 0;
   let abstentions = 0;
   for (const item of lastLoad.items) {
     if (item.kind === "discrepancy") discrepancies++;
+    else if (item.kind === "structural") structural++;
     else abstentions++;
   }
   return {
     reviewable: queue.total,
     remaining: queue.remaining,
     discrepancies,
+    // Counted separately rather than folded in with abstentions. A structural
+    // defect is arithmetic on the stored value — no fetch, no model, no false
+    // positive — so it is the finding we are MOST sure of. Reporting it as
+    // "unverified" understates it in the one direction that matters, because
+    // a banner reading "0 proposed changes" says we found nothing.
+    structural,
     abstentions,
     already_answered: lastLoad.alreadyDecided,
   };
@@ -235,10 +243,11 @@ function logQueueBanner(): void {
     console.log(`[sfsg-watch] ${lastLoad.emptyReason ?? "nothing to review"}`);
     return;
   }
-  console.log(
-    `[sfsg-watch] ${b.reviewable} review(s) ready ` +
-      `(${b.discrepancies} proposed change(s), ${b.abstentions} unverified)`,
-  );
+  const parts: string[] = [];
+  if (b.structural) parts.push(`${b.structural} broken`);
+  parts.push(`${b.discrepancies} proposed change(s)`);
+  parts.push(`${b.abstentions} unverified`);
+  console.log(`[sfsg-watch] ${b.reviewable} review(s) ready (${parts.join(", ")})`);
 }
 
 function statePayload(): Record<string, unknown> {
