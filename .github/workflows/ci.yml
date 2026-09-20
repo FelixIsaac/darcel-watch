@@ -1,0 +1,43 @@
+name: ci
+
+# What runs here is deliberately only the part that is deterministic and
+# offline. The rest of the pipeline talks to a live nonprofit's website, a
+# judgment model and a graph database, and a CI job that depends on any of
+# those is a job that goes red for reasons that are nobody's fault and teaches
+# people to ignore it.
+#
+# Not run here, and why:
+#   crosscheck.py  - needs FalkorDB and a live harvest. It is the real
+#                    correctness gate; run it locally before a release.
+#   audit.py       - fetches third-party sites and costs money per run.
+#   run.py         - same.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install pytest pyflakes
+      - name: Lint
+        run: python -m pyflakes *.py tests/*.py
+      - name: Tests (offline, no API key)
+        run: python -m pytest tests/ -q
+
+  typescript:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: npx tsc --noEmit
