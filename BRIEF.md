@@ -43,7 +43,8 @@ Free to detect, certain, fixable today.
 **"What has expired?"** — probably fine, but nobody has confirmed it in years.
 Not an error. A shelf life.
 
-It is **read-only against production**. We never POST. Every output is a
+It is **read-only against the SF Service Guide**: every request to their API
+is a GET. We never write to it. Every output is a
 candidate for a human, never an assertion.
 
 ```mermaid

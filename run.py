@@ -3,7 +3,7 @@
   harvest -> triage -> verify -> adjudicate -> emit
 
 Writes out/results.json (ui/index.html) and out/graph.json (ui/graph.html).
-Read-only against the SF Service Guide. We never POST to production.
+Read-only against the SF Service Guide: every request to their API is a GET.
 
     python3 run.py                  # evidence-only, in-memory graph
     GEMINI_API_KEY=... python3 run.py   # + Gemini adjudication

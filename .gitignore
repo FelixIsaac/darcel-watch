@@ -1,6 +1,8 @@
 data/
 data_v2/
-out/*.json
+out/
+!out/demo.png
+!out/screenshots/
 __pycache__/
 node_modules/
 

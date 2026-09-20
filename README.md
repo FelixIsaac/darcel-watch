@@ -151,7 +151,7 @@ npm run web    # http://localhost:8787 - Dashboard / Review / Graph / Freshness
 
 ## Design decisions
 
-- **Read-only, always.** We only ever GET from the SF Service Guide's own API. We never POST. Every output is a candidate for human review, never an assertion of fact.
+- **Read-only, always.** Every request to the SF Service Guide is a GET — `harvest.py`, `verify.py` and `fetcher.py` never set a method or a body. Nothing in this codebase can mutate their data; `change_request` payloads are written to a local file and never sent. (The only POSTs anywhere are to the LLM provider for inference, in `verify.py:76`.) Every output is a candidate for human review, never an assertion of fact.
 - **Cheapest, most certain tier first.** Structural checks before cross-field checks before graph queries before a live fetch and a model call — because every false positive we produced came from the last tier, and every finding we fully stand behind came from the first.
 - **Evidence has a ceiling, not just an age.** A well-formed value that's never been confirmed can't out-score a value someone actually checked, no matter how fresh-looking it is. That's the whole point of the freshness index.
 - **Abstention is a headline metric, not a bug we hide.** In our live run, 9 of 33 checked listings abstained. That's reported, not smoothed over.
