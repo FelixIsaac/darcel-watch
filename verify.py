@@ -16,6 +16,7 @@ import re
 import urllib.error
 import urllib.request
 
+import discover
 import envfile
 
 envfile.load()
@@ -175,18 +176,44 @@ def fetch(url):
         return None
 
 
-def gather_evidence(website):
-    """The agentic loop: fetch, check if evidence is enough, else pick the next
-    likely sub-page and retry - up to MAX_FETCHES total. Returns (texts, urls).
+def candidate_pages(website):
+    """Which pages to look at, asked of the SITE rather than guessed.
 
-    This is the decision step the demo hinges on: a plain scraper would just
-    fetch the homepage once. Here the agent inspects what it got back and
-    *chooses* where to look next based on what's still missing.
+    discover.py reads robots.txt, follows the sitemaps the site declares, and
+    falls back to a link-graph crawl when there are none. 81% of organisations
+    in this corpus publish a sitemap.
+
+    SUBPAGES remains only as the last resort, for the site that has no sitemap,
+    no robots.txt and no crawlable links. Until this function existed it was
+    the ONLY strategy: five guesses, against every organisation, while the
+    docstring here claimed the agent chose where to look. Auditing Building
+    Futures - a domestic violence service - those guesses returned one page and
+    two 404s, none carrying the stored number, and this function's caller came
+    one step from reporting a correct phone number as wrong. The number is on
+    /get-help/, which the sitemap lists and no guess would ever have found.
     """
     base = website.rstrip("/")
+    try:
+        inv = discover.discover(website)
+    except Exception:            # discovery must never break verification
+        inv = None
+    if inv and len(inv):
+        ranked = [u for u, _ in inv.top("phone", limit=MAX_FETCHES + 2)]
+        # Homepage first: on small nonprofit sites it is often the only page.
+        return list(dict.fromkeys([base + "/"] + ranked))
+    return [base] + [base + p for p in SUBPAGES]
+
+
+def gather_evidence(website):
+    """Fetch the pages most likely to carry evidence, stopping early once we
+    have enough to adjudicate. Returns (texts, urls).
+
+    The page list comes from candidate_pages() - the site's own sitemap, not a
+    hardcoded list of slugs.
+    """
     texts = {}
     fetched = []
-    queue = [base] + [base + p for p in SUBPAGES]
+    queue = candidate_pages(website)
 
     for url in queue:
         if len(fetched) >= MAX_FETCHES:
