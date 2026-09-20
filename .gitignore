@@ -11,3 +11,6 @@ cache/
 
 # Private: social drafts, not project documentation
 POST.md
+
+# Private: narrative/journal, not project output
+JOURNAL.md

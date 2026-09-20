@@ -78,7 +78,7 @@ def address_on_page(stored: str, page: str) -> bool | None:
     """Is this address on the page? Returns None when it cannot be decided.
 
     Returning None is the point. The first version returned False whenever its
-    regex failed, which silently turned "I cannot check this" into "the page
+    regex failed, which silently turned "cannot check this" into "the page
     does not contain it". Every disagreement in the first calibration run - all
     8 of them - was this bug, not a model error:
 

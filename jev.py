@@ -242,7 +242,7 @@ def relates(claim: str) -> dict:
     That matters here more than anywhere else. Conflating "the page is silent"
     with "the page disagrees" is the single error behind most of what this
     project has had to retract, and an explicit option is a stronger guarantee
-    against it than an inference rule I wrote.
+    against it than an inference rule written in application code.
 
     It also returns a `confidence` - the concentration of the distribution -
     which the two-noul form has no equivalent of, and costs one question
@@ -411,7 +411,7 @@ def judge_page(page_text: str, claims: dict[str, str], url: str | None = None,
 
     One question per claim rather than two also halves the cost, and "says
     nothing" becomes an option the MODEL selects instead of a state inferred by
-    my code from two low numbers.
+    application code from two low numbers.
     """
     qs = {f"rel__{key}": relates(claim) for key, claim in claims.items()}
     answers, usage = ask(page_text[:MAX_STATE_CHARS], qs)

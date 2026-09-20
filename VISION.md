@@ -157,4 +157,4 @@ gap needs human review of the findings themselves, and that has not been done.
 
 ---
 
-[PROBLEM.md](PROBLEM.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [JOURNAL.md](JOURNAL.md) · [FACTS.md](FACTS.md)
+[PROBLEM.md](PROBLEM.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [FACTS.md](FACTS.md)

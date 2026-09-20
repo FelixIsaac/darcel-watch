@@ -27,7 +27,7 @@ earlier version got it wrong.
 
 2. ABSENCE IS NOT CONTRADICTION. Each claim gets ONE three-way Choice -
    supports / contradicts / says_nothing - so silence is an option the model
-   SELECTS rather than a state inferred by my code from two low probabilities.
+   SELECTS rather than a state inferred in code from two low probabilities.
    Only an active contradiction can reach a human. This is the single rule that
    would have prevented most of what this project has retracted, and the form
    was chosen by measurement: see experiment.py.

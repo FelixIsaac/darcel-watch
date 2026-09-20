@@ -1,7 +1,7 @@
 # Architecture
 
-> [PROBLEM.md](PROBLEM.md) says why. This says how. [JOURNAL.md](JOURNAL.md)
-> says what it took, including the parts that were wrong.
+> [PROBLEM.md](PROBLEM.md) says why. This says how. Every number traces to
+> [`FACTS.md`](FACTS.md), which also lists what has been retracted.
 
 ## The whole system
 
@@ -69,9 +69,10 @@ Also exploratory, not yet shipped as a module: **75 schedule rows across 15
 organisations close before they open** — `Simply the Basics` stores Mon–Fri as
 `0900 → 0500`, a "9 to 5" PM-conversion error.
 
-> `BRIEF.md` quotes 32 across 13 for this; my re-measure walked resource-level
-> schedules only and counted rows. The two have not been reconciled — flagged
-> rather than silently overwritten.
+> An earlier count put this at 32 across 13 organisations. The two measurements
+> used different denominators — this one walks resource-level schedules and
+> counts rows — and have not been reconciled. Flagged rather than silently
+> overwritten.
 
 ## Tier 4 — the live-source loop
 
@@ -156,7 +157,7 @@ flowchart TD
 ```
 
 The important property: **`says_nothing` is an option the model selects**, not a
-state my code infers when two separate probabilities both come back low. Conflating
+state inferred in code when two separate probabilities both come back low. Conflating
 "the page is silent" with "the page disagrees" is the error behind most of what
 this project has retracted, and an explicit option is a stronger guarantee than an
 inference rule.
@@ -265,6 +266,56 @@ CI              lint + offline tests + tsc only
 CI deliberately excludes anything touching a live nonprofit's site, a paid model or
 FalkorDB. A pipeline that goes red for reasons nobody controls teaches people to
 ignore it.
+
+## Decisions that are not obvious
+
+Each of these was arrived at by measurement or by a failure, and each is
+load-bearing enough that changing it would break something specific.
+
+**Absence and contradiction are separate values, not two ends of one scale.**
+A page that never mentions a phone number and a page that lists a different one
+look identical unless the system can represent "silent" distinctly. Most of this
+project's retracted findings came from collapsing them. Enforced in
+`jev.classify` and locked by test.
+
+**Site identity is a precondition, not a claim.** Every claim-level verdict
+assumes the `website` field points at the right organisation. When it does not,
+every claim is judged against a stranger's site and everything looks
+contradicted. `audit.page_belongs` checks first and withholds all verdicts if no
+fact from the listing appears anywhere on the linked site. Anchors are address
+and phone, never the organisation's name — nonprofits routinely run domains
+unrelated to what they are called.
+
+**One three-way Choice beats two independent yes/no questions**, measured:
+AUROC 0.992 against 0.983, and — decisively — 12 safe contradictions against 0.
+Two nouls cannot raise a contradiction at a defensible threshold at all, and at
+a looser one they are wrong a third of the time.
+
+**`Score` is the wrong primitive here.** Evidence strength looks like an ordered
+spectrum, but relation-to-a-claim is categorical: a page states the thing, states
+otherwise, or is silent. Tested and rejected — AUROC 0.918, ECE 0.168.
+
+**Structured criteria matter; structured state does not.** `what`/`not_for`/
+`examples` on each option raised safe contradictions from 14 to 25. Structured
+state measured no better, because the state here is one blob of page text with no
+relational structure to preserve.
+
+**A site's own sitemap beats guessing at its URLs.** The previous version tried
+five hardcoded slugs against every organisation. 81% of organisations in this
+corpus publish a sitemap, and `<lastmod>` is a signal nothing else provides:
+when the *source* changed, as opposed to when the *directory* changed.
+
+**Thresholds sit at the middle of the plateau, not its edge.** The score
+distribution is bimodal, so many thresholds tie at best precision on a
+calibration set. Selecting the most aggressive one that just clears the target
+overfits — it scored 0.958 on calibration and 0.932 held out, below the target it
+was chosen to meet. The plateau midpoint held at 1.000.
+
+**Ground truth must not come from a model.** `calibrate.py` scores against a
+mechanical string-match oracle. An oracle that returns `False` when it cannot
+decide is worse than no oracle at all: it converts "cannot check" into "not
+there", and every resulting disagreement looks like a model error when it is a
+measurement bug.
 
 ## Layer audit
 

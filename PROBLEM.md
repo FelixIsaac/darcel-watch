@@ -137,7 +137,7 @@ absence.** A page that does not mention a number and a page that contradicts it
 produce the same silence unless you deliberately ask two different questions.
 
 This project came within one step of filing exactly that error against a domestic
-violence service. See [JOURNAL.md](JOURNAL.md).
+violence service. See .
 
 ## What we got wrong
 
@@ -170,4 +170,4 @@ currently fitted rather than held out, and labelled as such.
 
 Next: [VISION.md](VISION.md) — what this becomes ·
 [ARCHITECTURE.md](ARCHITECTURE.md) — how it works ·
-[JOURNAL.md](JOURNAL.md) — what it took, including the wrong turns
+ — what it took, including the wrong turns
