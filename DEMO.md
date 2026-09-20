@@ -79,32 +79,35 @@ need food, shelter, a clinic. We searched first. ShelterTech already built it �
 1,759 orgs, 7,577 services, 16k users a month, open source, plus a chatbot and a
 phone line. So we asked what's actually broken instead."
 
-**0:20 — the number.** *(Shot 1)* "Thirteen percent of the phone numbers in this
-directory cannot be dialled. 24 of 189 — twenty of them truncated below ten digits
-— across 19 of 138 live listings. No model found that. It's arithmetic on digit
-counts, which means it cannot be a false positive. Separately: 126 of those 138
-listings have never been verified against their source. Not once."
+**0:20 — the number.** *(Shot 1)* "813 organisations are live to users. **598 of
+them — 73.6% — have never been verified or certified by anyone.** The quarter that
+have, were checked a median of 7.7 years ago. Eight in the last three years."
 
-**0:40 — the find.** *(Shot 2)* "MKL Rehab. An addiction treatment helpline. The
-stored number is `94410046` — eight digits. You cannot call it. Oakland Healthcare
-& Wellness, same fault: `02508000`. Check them on your phone right now."
+**0:40 — the find.** *(Shot 2)* "Building Futures. Domestic violence services.
+Their number is printed on the listing — `510-808-7410` — but it's in the label
+column, and the number field is empty. So the Call button links to `tel:null`.
+Tap it on a phone and nothing happens. Same for the LGBT Center and a youth
+clinic. Check it right now."
 
 **0:55 — the graph.** "The directory is a graph: org → service → address → phone.
 One org closing invalidates everything beneath it — we measured a blast radius of
 36. And three separate listings share one switchboard number, which a flat table
 hides and one traversal surfaces."
 
-**1:10 — the honest part.** *(Shot 3)* "Ten abstentions against two confirmed
-findings. On this sample every model-judged case came back 'I can't tell' — including
-a number that turned out to be a Zoom meeting ID. We tightened that prompt twice to
-make it more conservative, and it got more conservative. That's the design working.
-A wrong shelter address at 9pm is worse than no answer."
+**1:10 — the honest part.** *(Shot 3)* "Across 80 listings the model asserted
+**nothing** — 57 matches, 23 abstentions, zero discrepancies. Every finding came
+from the free structural tier. We tightened that prompt twice to make it more
+conservative and it is. A wrong shelter address at 9pm is worse than no answer."
 
-**1:15 — the three bugs.** "We shipped three of our own bugs and caught all three by
-reading our own output. A careers line read as a main number. A change request that
-proposed changing an address to itself. And comparing only the first of ten stored
-numbers — that one a human caught, by opening the real listing. Which is exactly
-what the human is there for."
+**1:15 — freshness.** "Broken and stale are different problems. We score every
+listing on a decay model — hours expire in six months, phone numbers in three
+years. The directory sits at 36 out of 100. About 204 volunteer-hours moves it to
+70. That's a number ShelterTech can't compute today."
+
+**1:25 — the four bugs.** "We shipped four of our own bugs and caught all four by
+reading our own output — including auditing the wrong API for most of the build.
+Two were caught by a human opening the actual listing. Which is exactly what the
+human is there for."
 
 **1:20 — the close.** *(Shot 4)* "Every finding goes to a volunteer as a message —
 they're not staff at desks. We never write to ShelterTech's system. We're not

@@ -13,123 +13,129 @@ It's named for Darcel Jackson, who founded ShelterTech after being injured as a 
 
 ## What it does
 
-SF Service Guide Watch is an agent that re-verifies SF Service Guide listings against each organisation's own live website, models the directory as a graph so a single closure propagates to everything connected to it, abstains when the evidence is weak, and emits a ranked change-request queue in the shape ShelterTech's own volunteers already work with. It never writes to their production system — every output is a candidate for a human to review.
+SF Service Guide Watch checks whether the directory's listings are still true, and how confident it should be that they are. It runs four tiers of checking, cheapest and most certain first: a structural pass over the stored data (free, cannot false-positive), a graph model of the directory (so one org's closure propagates to everything connected to it), and — only when the first tiers can't answer the question — a live fetch of the org's own website adjudicated by Gemini. Everything is a candidate for a human to review, never an assertion of fact, and we never write to ShelterTech's production system.
 
-We measured the problem before building the fix. Sample: 156 random resource IDs from the live, public, unauthenticated AskDarcel API. 138 of those are marked `approved` — live to users right now. Of those 138: **126 have never been verified once** (`verified_at: null`). The 12 that do carry a verification date were verified a median of **~2,838 days ago (~7.8 years)**. **Zero** were verified in the past year. 120 of the 138 list a website we can check against.
+We measured the problem before building the fix, against the full directory, not a sample: **813 approved organisations. 598 (73.6%) have never been verified or certified by anyone.** The 215 that were, a median of ~7.7 years ago. Only 8 have been confirmed in the last three years.
 
 The gap isn't discovery. It's freshness. A wrong shelter address at 9pm is worse than no answer at all.
 
 ## How we built it
 
-- **Harvest** (`harvest.py`): read-only sampling of the public AskDarcel API, cached locally so we don't hammer it on repeat runs.
-- **Graph** (`graph.py`): the directory modelled as Org→Service→Category, Org→Address, Org→Phone. Our live run built 1,158 nodes and found 9 contradictions (distinct org names sharing one phone/address — a graph pattern match, not a table scan). Two features are load-bearing on this and don't exist without it: blast radius (one org closing invalidates every service beneath it and any co-located org, one traversal) and staleness propagation (doubt decays outward along edges to rank the queue).
-- **Triage** (`run.py`): a cheap, deterministic, model-free scoring pass before any Gemini call — ranks candidates by never-verified + critical category (shelter/food/health/legal/crisis/hygiene) + having a checkable website. This decides where to spend the model budget; the classical step guards the expensive step, not the other way round.
-- **Verify** (`verify.py`): an agentic evidence loop — fetch the homepage, and if that doesn't settle the question, walk likely sub-pages (`/contact`, `/about`, `/hours`, `/visit`, `/locations`) up to 3 fetches, stopping early once there's enough signal. Checks phone, address, and closure/relocation language against the stored record.
-- **Adjudicate**: deterministic code gathers the evidence; Gemini 2.5 Flash judges it — over **OpenRouter** (`google/gemini-2.5-flash`, OpenAI-shaped chat completions API), the path we actually ran. The code also supports calling Google AI Studio directly if given a Google-shaped key, selected automatically by key prefix, but we did not exercise that path in our run — the transport differs, the model and prompt don't. Given the stored value, the live candidate, and the exact quote it came from, Gemini decides discrepancy / match / abstain and writes the one-sentence human-readable reason. A conservative deterministic fallback runs when no API key is set, and the whole pipeline still runs end to end without one.
-- **Rank and emit**: on a genuine discrepancy, `run.py` computes blast radius and a priority score (`confidence * (1 + blast_radius_size * 0.15)`) — confidence alone is a bad rank, a wrong record that invalidates twelve services deserves attention before a high-confidence typo. The change-request payload (field, current value, proposed value, source URL, verbatim quote) is written to `out/results.json` — never POSTed. `run.py` chains all of this: harvest → build graph → triage → verify → rank by blast radius/priority → propagate staleness → write output.
-- **Review UI** (`ui/index.html`): a static page a ShelterTech volunteer could actually use, loading `out/results.json` — each candidate shown with its verdict, confidence, priority, source link, and quote, so a decision takes seconds instead of re-deriving the evidence from scratch.
+We inverted the architecture partway through, after our most expensive tier produced two false positives. The pipeline now runs cheapest-and-most-certain first:
+
+- **Structural** (`verify.check_phone_format`): reads a stored phone record and flags three unambiguous shapes — an empty number field with the real number typed into the label instead, a non-US country code on a Bay Area listing, or two values run into one field. No fetch, no model, runs over the whole corpus every time because it's free.
+- **Graph** (`graph_falkor.py` on FalkorDB, `graph.py` as a zero-dependency fallback): the directory modelled as Org→Service→Category, Org→Address, Org→Phone. FalkorDB builds **7,406 nodes** on the full corpus and answers `blast_radius`, `contradictions`, and `propagate_staleness` as real Cypher queries — a traversal, a pattern match, a variable-length path. `crosscheck.py` proves the in-memory fallback agrees with FalkorDB exactly, and caught one real divergence (the fallback's BFS could cross an edge twice; Cypher forbids it) that we fixed rather than ignored.
+- **Live source + model** (`verify.gather_evidence`, `verify.adjudicate_gemini`): the expensive tier. Fetches the org's homepage, walks likely sub-pages if that doesn't settle the question, and hands deterministic evidence to Gemini 2.5 Flash — via **OpenRouter** — to judge whether it contradicts the stored value. Instructed to abstain on anything ambiguous. Runs only against a `BUDGET`-sized subset per pass, because it's the tier that costs money and produces false positives if we're not careful.
+- **`run.py`** chains all of it — harvest → structural (whole corpus) → triage → live-verify (budgeted) → blast radius / priority ranking → staleness propagation → `out/results.json` and `out/graph.json`.
+- **`freshness.py`** scores every listing separately for currency — see below — into `out/freshness.json`.
+- **`notify/web.ts`**: one Node server on :8787, no framework, serving four pages off those JSON files — Dashboard, Review (the queue, one item at a time), Graph, Freshness — plus a `/api/run` + SSE stream so the dashboard can trigger a real pipeline run and show it working live.
 
 ## What we found
 
-### The headline finding needs no model
+### We audited the wrong API, and it produced a false headline finding
 
-Before any Gemini call, a plain arithmetic check on the stored data itself — no scraping, no model, just counting digits — found this across the 138 approved listings in our sample:
+Our first phone-number audit read `askdarcel.org/api` (v1), an older Rails API. It reported 24 of 189 numbers as undialable, including a claim that an addiction-treatment helpline's number didn't work, and we published that as the project's headline finding.
 
-```
-approved listings scanned : 138
-phone numbers stored      : 189
-NOT dialable as stored    : 24  (13%)
-  truncated (<10 digits)  : 20
-  extension run into no.  :  4
-listings affected         : 19 of 138
-```
+**It was wrong, and we retracted it.** The live site actually reads `https://www.sfserviceguide.org/api/v2`, and v1's phone formatter mangles US numbers — it reads a US area code as an international dialling code (510 → Peru, 209 → Egypt) and strips the "foreign" digits on the way out. Re-run against v2, 21 of the original 23 flagged numbers are fine, including the addiction-treatment line, which dials correctly on the live site. We caught this because a reviewer, comparing the two runs, asked "wait, the source for both is the same?" It wasn't.
 
-Twenty numbers are stored with the area code stripped off, too short to dial. The clearest single example: **MKL Rehab – Addiction Treatment Helpline** (#2514) has `94410046` on file — 8 digits, truncated, cannot be dialled. An addiction treatment helpline whose phone number doesn't work. No model found this; it's a digit count. The same broken-number set includes Alameda County Family Justice Center (`02678800`) — domestic violence services with a phone number nobody can call.
+### The real finding: 8 of 813 approved listings, a phone defect provable from the stored value alone
 
-This check is arithmetic on digit counts. No model, no scraping, no judgment call, and therefore no false-positive risk. That's the argument for the whole design: use the cheap deterministic check where it's sufficient by itself, and reserve the model for judgment calls a digit count can't make.
+No model, no scraping. Lead example: **Building Futures**, a domestic violence services organisation — its listing's Call button links to `tel:null` while a working number (`510-808-7410`) sits typed into the label field right beside it, unused. The same defect (number in the label, `number` field empty) affects the San Francisco LGBT Community Center, Larkin Street Youth Clinic, Calvary Street Ministries, and Pilipino Senior Resource Center. Two more listings (SF311's TTY line, Toolworks) carry a non-US country code on a Bay Area number, so it's parsed and dialled wrong. One (Internet For All Now) has two values run into a single phone field.
 
 ### The live run: structural checks carry the confident findings, the model mostly abstains
 
-At `BUDGET=25`, the current run produces **2 discrepancies, 10 abstentions**. Both discrepancies are structural (`phone_format`), not model judgment calls:
+At `BUDGET=25` against the full corpus: 33 checked, **8 discrepancies (all structural — the phone defects above), 9 abstained, 16 matched.** None of the discrepancies in this run came from the model's judgment alone. One abstention: our regex evidence-gatherer flagged what looked like a phone number on an org's page, but it was a Zoom meeting ID — the model declined to call it a match or mismatch.
 
-- MKL Rehab – Addiction Treatment Helpline (#2514) — stored `94410046`, 8 digits, truncated.
-- Oakland Healthcare & Wellness (#2312) — stored `02508000`, 8 digits, truncated.
+We tightened the adjudication prompt twice specifically to make it more conservative, and it got more conservative. That's the design working, not a limitation: the cheap structural tier now carries every confident finding, and the model's job — judgment on genuinely ambiguous scraped evidence — is done correctly by abstaining when it can't tell.
 
-Every model-adjudicated finding in this run came back **abstain** — including a case where our regex evidence-gatherer found something that looked like a phone number on an org's page (Grassroots Open Assistive Tech, #2599) but it was actually a Zoom meeting ID. The model declined to call it a match or a mismatch.
+### Four of our own bugs, caught by looking, none by tests
 
-We're saying this plainly because it's the designed outcome, not a limitation. We tightened the adjudication prompt twice specifically to make it more conservative, and it got more conservative: on this sample, its judgment on genuinely ambiguous scraped evidence is overwhelmingly "I can't tell — ask a human." The cheap structural check carries the confident findings; the model's job is judgment, and abstaining on ambiguous evidence is it doing that job correctly.
+**1. A false positive in the model's judgment.** The first prompt version flagged Sutter Health at confidence 1.0 for a phone "mismatch" — stored `800-478-8837`, live page showed `916-297-9000`. That live number was scraped off a careers page: a hiring line, not a replacement main number. We rewrote the prompt to judge purpose, not difference, and it now correctly abstains: *"The live number is presented in the context of a hiring process, which is a different purpose."*
 
-### Three of our own bugs, caught by looking, none by tests
+**2. A self-referential bug in our own code.** Oakland Healthcare & Wellness was, in an earlier run, shown to a reviewer as a discrepancy on its *address* — proposing to change it to the exact same value — because the adjudicator reasoned about a field no gathered evidence covered, and our change-request builder fell through to whatever finding was first available. Fixed by requiring a field to actually differ before it's emitted.
 
-**1. A false positive in the model's judgment.** The first version of our prompt flagged Sutter Health at confidence 1.0 for a phone "mismatch" — stored `800-478-8837`, live page showed `916-297-9000`. That live number was scraped off a careers page: a hiring line, not a replacement main number. Different numbers isn't the same thing as one being wrong. We rewrote the prompt to judge purpose, not difference: does the live number plausibly replace the stored one for the *same* purpose, and abstain if context says otherwise (careers, fax, donations, a department, a second location). After the fix, Sutter Health correctly abstains: *"The live number is presented in the context of a hiring process, which is a different purpose."*
+**3. A false positive caught by a human, not by us.** We once flagged Meals on Wheels of Alameda County for a "wrong" phone number that was already correctly stored among nine others on the same listing — our own `check_phone` only ever compared the first one. A human opened the real listing and found it. It now correctly abstains.
 
-**2. A self-referential bug in our own code.** In an earlier run, Oakland Healthcare & Wellness was shown to a reviewer as a discrepancy on its *address*: `stored "3030 Webster St. Oakland 94609" → live "3030 Webster St. Oakland 94609"` — a proposed change to the exact same value. The adjudicator reasoned about a field (phone) that no gathered evidence covered, and our change-request builder fell through to whatever finding was first available, whether or not it genuinely differed. Fixed by requiring a field to actually differ before it's emitted, and downgrading to abstain when nothing gathered is actionable.
+**4. We were reading the wrong API entirely.** The retraction above. The biggest of the four, because it invalidated a headline claim rather than one listing — and, like bug #3, found by a human looking at the actual data, not by any check we'd written.
 
-**3. A false positive caught by a human, not by us.** In an earlier run we flagged Meals on Wheels of Alameda County (#2258) for a phone mismatch — stored `5106544000105`, live `510.777.9560` — and proposed replacing the stored number. A human opened the actual listing: the site already lists `(510) 777-9560` as its Main Line. The listing carries nine phone numbers, one per programme or region, and `5106544000105` is `(510) 654-4000 ext. 105` — the J-Sei Nutrition Services line, correctly stored. Our own `check_phone` only ever compared the *first* stored number and never checked the other eight. Fixed by comparing against every stored number, and reporting an unmatched live number as a possible *addition* rather than a replacement when a listing carries many numbers. Meals on Wheels is no longer flagged — it now correctly abstains (`phone_missing`: the live number isn't among the ones on file, which isn't the same as a stored number being wrong).
+Two of these four were caught by a person opening the real listing, not by our code. That's the human-in-the-loop argument made by evidence: the human in our loop caught the agent, exactly as designed.
 
-That third bug is the strongest argument for the human-in-the-loop design in this whole project: the human in our loop caught the agent, exactly as designed. Nothing here ships straight to ShelterTech. Every output is a candidate, and this is what "candidate" is for.
+## The freshness index
+
+This is the centre of the project, not a side metric. Structural checks answer "is this value wrong right now" for the handful of listings where it's provably true. They can't answer the far more common case: nobody has looked at this listing in years, it's probably fine, and "probably" isn't good enough for someone deciding where to sleep tonight.
+
+`freshness.py` treats staleness as **expiry, not error**. Every field has a half-life — phone/address 3 years, website/email 2 years, schedule 6 months — and a score decays from whatever evidence last supported it. The idea that makes this work: **evidence has a ceiling, not just an age.** A structural pass proves a value is well-formed, capped at 40/100, no matter how recently it was touched — because `(415) 555-0123` is a perfectly well-formed number for an organisation that closed in 2019. Only the organisation's own current source, or a human, resets the clock to a higher ceiling.
+
+Run against all 813 approved listings: **median freshness 36.2/100. 8 fresh (1.0%), 600 stale (73.8%), 205 expired (25.2%).** Every listing gets one named next action — the single cheapest thing that would raise its score most — so the output is a work plan, not a guilt trip. We estimate roughly **204 volunteer-hours** to move the median from 36 to 70. That's a number ShelterTech's current monthly-datathon process has never had, because nobody has scored the whole directory this way.
+
+We tested whether the method generalises past phones by applying it once to opening hours: **32 schedule entries across 13 organisations close before they open**, 20 of them looking like a "9 to 5" typed as 09:00–05:00. Same method, different field, a correction a volunteer can compute rather than just a flag.
 
 ## Challenges we ran into
 
-- Distinguishing an actually-stale listing from a slow/JS-only/bot-blocking website. We cap fetches, check for real readable text, and abstain rather than guess when a site doesn't give us enough.
-- Catching our own mistakes across two different layers. Gemini flagged Sutter Health at confidence 1.0 for a phone "mismatch" that was actually a careers-page number. Separately, our own `check_phone` compared only the first of ten stored numbers for Meals on Wheels of Alameda County and proposed replacing a number that was already correct. Neither was caught by a test — both were caught by a human reading the actual output and checking it against the real listing.
-- Building a graph model in the time available without pulling in a database — an adjacency dict is the right scale-appropriate answer for 1,759 nodes, but we had to be disciplined about which queries actually need graph structure versus which are just filters.
+- Getting burned by our own most expensive tier, twice (bugs #1 and #4), and having to invert the architecture as a result: cheap-and-certain first, live-source-plus-model only when the first tiers can't answer.
+- Distinguishing an actually-stale listing from a slow/JS-only/bot-blocking website in the live-fetch tier. We cap fetches, check for real readable text, and abstain rather than guess.
+- Deciding what a structural check is even allowed to claim. The rule that survived: only the three phone shapes a volunteer can fix by looking at the stored value alone — nothing that requires guessing at intent.
+- Getting the freshness ceiling right: it took us a wrong first instinct (score by recency alone) before landing on "well-formed is not current," which is the idea the whole index depends on.
 
 ## Accomplishments we're proud of
 
 - We searched first and found the real gap instead of shipping a duplicate directory.
-- We measured the gap live during the hackathon against production data, not a claim from a blog post.
-- Our strongest finding needed no model at all: a deterministic digit-count check found 24 of 189 stored phone numbers (13%) are undialable as stored — including an addiction treatment helpline and a domestic-violence family justice centre.
-- We caught three of our own bugs by reading the output, never by a test — two in the model's judgment and one in our own comparison logic — and fixed the root cause in each, not just the one case. The third was caught by a human opening the real listing: exactly what the human-in-the-loop design is for.
-- Every output in the review queue carries a source URL and a verbatim quote — no quote, no claim.
-- We're precise about what we did and didn't use. FalkorDB is real — Docker, Cypher, cross-checked against an in-memory twin for parity. Gemini 2.5 Flash runs over OpenRouter, not the direct Google API; the direct path exists in the code but we didn't exercise it. iMessage is wired against the real Spectrum SDK but has never delivered a message — the shared-line pool still refuses our allowlisted recipient. No production writes, ever.
+- We measured the gap against the full directory, not a sample — 813 approved orgs, 73.6% never confirmed by anyone.
+- Our strongest per-listing finding needed no model: 8 structural phone defects, provable from the stored value, cannot false-positive. Lead example: a domestic-violence organisation's Call button dials nothing.
+- We built a second product on top of the first: a freshness index that scores the whole directory for currency and gives every listing a named next action, with a cost estimate (~204 hours) ShelterTech doesn't have today.
+- We caught four of our own bugs by reading the output, never by a test — and retracted a headline finding in public rather than let it stand. Two of the four were caught by a human opening the real listing, which is exactly what the human-in-the-loop design is for.
+- We're precise about what we did and didn't use. FalkorDB is real — Docker, Cypher, 7,406 nodes, cross-checked against an in-memory twin for parity. Gemini 2.5 Flash runs over OpenRouter, not the direct Google API; the direct path exists in the code but we didn't exercise it. iMessage review is wired against the real Spectrum SDK but has never delivered a message — the shared-line pool still refuses our allowlisted recipient. No production writes, ever.
 
 ## What we learned
 
-Prior-art search is itself the highest-leverage hour of a hackathon. The organisation-with-best-intentions problem in civic tech usually isn't "no one built a directory" — it's that the directory exists and nobody has the hours to keep it honest. That reframed the whole build from "AI finds services" to "AI keeps the humans who already do this job from drowning."
+Prior-art search is the highest-leverage hour of a hackathon, and so is checking your own sources a second time. The organisation-with-best-intentions problem in civic tech usually isn't "no one built a directory" — it's that the directory exists and nobody has the hours to keep it honest. We learned that the same discipline applies to our own pipeline: our most expensive, most impressive-looking tier (a model reading a live website) was also the one that produced every false positive we found. The fix in both cases was the same instinct — check the cheap, certain thing first, and don't trust confidence you haven't verified.
 
 ## What's next
 
 - Offer this to ShelterTech directly — the point is to reduce their volunteer cost, not compete with them.
-- Swap the in-memory graph for FalkorDB + Cypher at full corpus scale (1,759 orgs, 7,577 services) — same three queries, same model.
-- Widen evidence sources beyond the org's own website (e.g. Google Business Profile status) with the same abstain-by-default discipline.
-- Run staleness propagation against the full corpus, not a 156-ID sample, and validate the decay/hop parameters against real ground truth.
+- Turn the one-off schedule/hours check into a shipped, tested module alongside `check_phone_format`.
+- Fix iMessage delivery (Photon Business plan, or another dedicated-line path) so the review queue is actually answerable from a phone.
+- Validate the freshness half-life and evidence-ceiling constants against ShelterTech's own datathon outcomes, instead of our judgment calls.
+- Widen live-source verification beyond the org's own website (e.g. Google Business Profile status) with the same abstain-by-default discipline.
 
 ## 90-second demo script
 
 | Time | Beat |
 |---|---|
 | 0:00–0:15 | "We set out to build an AI resource finder for SF. Then we searched — it already exists." Show sfserviceguide.org, mention 1,759 orgs / 16,000 monthly users. |
-| 0:15–0:30 | "So we measured what's actually broken." Show the baseline table: 156 sampled → 138 approved → 126 never verified, 12 verified a median of 7.8 years ago, zero in the past year. |
-| 0:30–0:45 | The structural stat, no model involved: a digit-count check on 189 stored phone numbers finds 24 (13%) undialable as stored, 20 of them truncated below 10 digits, across 19 of 138 listings. Zero false-positive risk — it's arithmetic. |
-| 0:45–0:55 | Lead with MKL Rehab – Addiction Treatment Helpline: stored number `94410046`, 8 digits, cannot be dialled. An addiction treatment helpline with a phone number that doesn't work. Most concrete, most checkable, most human-consequential finding in the project. |
-| 0:55–1:05 | Show the live run and the Mermaid pipeline diagram: harvest → graph (1,158 nodes, 9 contradictions) → triage (cheap, model-free) → verify (agentic evidence loop) → Gemini 2.5 Flash via OpenRouter adjudicates → 2 discrepancies (both structural), 10 abstentions. |
-| 1:05–1:15 | Say it plainly: every model-adjudicated finding in this run came back abstain, including a Zoom meeting ID the regex mistook for a phone number. That's the design working — the cheap check carries the confident findings, the model abstains rather than guess on ambiguous evidence. |
-| 1:15–1:28 | Tell the strongest bug story: we once flagged Meals on Wheels for a "wrong" phone number, and a human opened the real listing and found the number was already correctly stored among nine others — our code only checked the first one. It now correctly abstains. The human in the loop caught the agent, exactly as designed. |
+| 0:15–0:30 | "So we measured what's actually broken." Full corpus, not a sample: 813 approved orgs, 73.6% never verified or certified by anyone, the rest a median of 7.7 years ago. |
+| 0:30–0:45 | The real structural finding: 8 of 813 listings have a phone defect provable from the stored value alone. Lead with Building Futures — a domestic-violence organisation whose Call button dials `tel:null` while a working number sits unused in the label field beside it. No model, cannot false-positive. |
+| 0:45–0:55 | Say the retraction out loud: our first version of this exact finding was wrong — we were reading a superseded API whose phone formatter mangled US numbers into fake international ones. We caught it, deleted the false claim, and rebuilt the check against the API the live site actually uses. |
+| 0:55–1:10 | Open the Freshness page: median 36.2/100, 600 of 813 listings stale, 205 expired, each with one named next action. Explain the one idea that matters: a well-formed value that's never been confirmed caps at 40 — being well-formed isn't being current. |
+| 1:10–1:20 | Show the live dashboard: trigger a run over SSE, watch the four-tier pipeline execute — structural, graph (FalkorDB, 7,406 nodes), live-source, Gemini adjudication — landing on 8 discrepancies, 9 abstentions, 16 matches. |
+| 1:20–1:28 | The human-in-the-loop story: two of our four self-caught bugs, including the API mistake, were found by a person opening the real listing, not by our code. That's the argument for shipping a review queue instead of an auto-updater. |
 | 1:28–1:30 | Close: "This isn't a 16th directory. It's fewer volunteer-hours to keep the one that exists honest. Next step: give it to ShelterTech." |
 
 ## Anticipated judge questions
 
 **Isn't this just scraping?**
-Scraping gathers evidence; it doesn't decide anything. The deterministic layer only extracts candidate signals (a phone number, a closure phrase, a zip code). Whether that signal actually contradicts the stored record is a judgment call we hand to Gemini, with an explicit instruction to abstain when the evidence is ambiguous. A plain scraper also wouldn't fetch a second page when the homepage doesn't answer the question — ours does, up to 3 fetches, stopping early once it has enough signal.
+Scraping is only the last of four tiers, and it's the one we trust least. Structural checks read the stored value alone and cannot false-positive. The graph tier is pattern matching and traversal, not scraping at all. Only when those can't answer a question do we fetch a live page, and even then deterministic code gathers the evidence — Gemini's only job is judging whether it actually contradicts the stored value, with an explicit instruction to abstain when it's ambiguous.
 
 **Why not just use their existing chatbot (`casey`)?**
 `casey` answers a user's question from the data as stored. It doesn't check whether that stored data is still true. We're not building a better front end — we're checking the back end the front end (and the phone line) both depend on.
 
 **Did you actually use a graph database?**
-No, and we're not claiming we did. We built an in-memory adjacency graph, which is the correct tool at 1,759 nodes — zero dependencies, and it's genuinely a graph model (typed edges, multi-hop traversal), not a table with a graph label on it. Three features — blast radius, contradiction detection, staleness propagation — are graph queries, not table scans, and they'd port directly to FalkorDB + Cypher at real scale with the same model and same three queries. We'd rather say exactly what we built than claim a database we didn't touch.
+Yes — FalkorDB, over Cypher, in Docker, 7,406 nodes on the full corpus. `blast_radius` is a traversal, `contradictions` a pattern match, `propagate_staleness` a variable-length path. There's also a zero-dependency in-memory fallback for when FalkorDB isn't running, and `crosscheck.py` proves the two produce identical results across the whole corpus — it even caught a real bug in the fallback (it could cross the same edge twice; Cypher forbids that) before we shipped it.
 
-**Do you ever write to AskDarcel?**
+**Do you ever write to the SF Service Guide?**
 No. Every request is a GET. Change requests are written to a local file for a human to review; nothing is POSTed to their production system.
 
 **How do you know your verification is more accurate than what's already there?**
-We don't claim it is — we claim it's fresher and evidenced. Every flagged item carries a live source URL and a verbatim quote a volunteer can check in seconds, which is faster than the datathon process re-deriving it from scratch. The system is also honest about not knowing: abstention is reported as a metric, not hidden.
+We don't claim it is across the board — we retracted our first headline finding when it turned out to be wrong. What we claim is narrower and checkable: 8 structural findings that are provably true from the stored value alone, and a freshness score that's honest about what it doesn't know. Every claim carries a source; abstention is reported as a metric, not hidden.
 
-**Didn't Gemini get one wrong (Sutter Health)?**
-Yes, on our first prompt version — flagged at confidence 1.0 for a number that was actually a careers-page line, not a replacement main number. We caught it by reading our own output, rewrote the prompt to judge whether the live number serves the *same purpose* as the stored one rather than just checking for a difference, and it now correctly abstains with a stated reason. We found two more bugs the same way: our own code proposing "change this address to itself" for Oakland Healthcare & Wellness (a change-request builder that didn't check the field actually differed), and a comparison bug that flagged Meals on Wheels of Alameda County for a "wrong" phone number that was already correctly stored elsewhere on the same listing — our code only checked the first of nine stored numbers. That last one was caught by a human opening the real listing, not by any code we wrote: the human in the loop caught the agent, which is the point of shipping a review queue instead of an auto-updater. Meals on Wheels is no longer flagged; it now correctly abstains. We're showing all three because they're the strongest evidence our abstention and review design does real work, not because we're proud of any of the misses.
+**Didn't you get a finding wrong (the phone numbers)?**
+Yes — badly, and publicly. Our first pass read a superseded API whose phone formatter corrupted US numbers into fake international ones, and we published 24 "undialable" numbers as a headline finding before catching it. 21 of 23 were artifacts. We deleted the claim, rebuilt the check against the API the live site actually uses, and found a smaller, verified, structurally-provable version of the same idea (8 of 813). We're leading with this story, not hiding it, because catching your own headline finding being wrong and saying so is a stronger claim about everything else in this repo than getting it right the first time would have been.
 
 **Are you calling Gemini directly through Google's API?**
-No — our live run goes through OpenRouter (`google/gemini-2.5-flash`). The code also has a direct-Google-AI-Studio path that activates on a Google-shaped key, but we didn't exercise it in the run we're demoing. Same model and prompt either way; only the transport differs.
+No — our runs go through OpenRouter (`google/gemini-2.5-flash`). The code also has a direct-Google-AI-Studio path that activates on a Google-shaped key, but we didn't exercise it in the runs we're demoing. Same model and prompt either way; only the transport differs.
 
 **Your model mostly abstains — isn't that a weak result?**
-No, it's the point. In our live run, both confirmed discrepancies came from a deterministic digit-count check, not the model — and every model-adjudicated case came back abstain, including a Zoom meeting ID our regex mistook for a phone number. We tightened the adjudication prompt twice specifically to make it more conservative, and it got more conservative. A model that abstains on genuinely ambiguous scraped evidence, and lets a cheap structural check carry the confident findings, is doing its job. The failure mode we were guarding against was false confidence, not caution.
+No, it's the point. In our live run, every confirmed discrepancy came from the deterministic structural tier, not the model — and every model-adjudicated case came back abstain or match, including a Zoom meeting ID our regex mistook for a phone number. We tightened the adjudication prompt twice specifically to make it more conservative, and it got more conservative. A model that abstains on genuinely ambiguous scraped evidence, letting a cheap structural check carry the confident findings, is doing its job. The failure mode we were guarding against was false confidence, not caution.
+
+**Does the iMessage/review-by-text feature actually work?**
+Not end to end. Authentication succeeds, the iMessage provider is enabled, and our reviewer number is registered as a project user — but Photon's shared-line pool (the plan we're on) still refuses delivery. A dedicated line on their Business plan isn't subject to that restriction; we haven't upgraded to confirm it fixes it. We're saying this plainly rather than demoing around it.
