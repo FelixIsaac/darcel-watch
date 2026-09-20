@@ -135,10 +135,23 @@ export interface ReviewItem {
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 
-/** Coerce anything into a trimmed string; `fallback` for null/undefined/"". */
+/**
+ * Control characters, collapsed to spaces.
+ *
+ * Everything in a review ultimately came from scraping somebody's website, and
+ * real pages contain form feeds, vertical tabs and stray C1 bytes. They render
+ * as nothing, they break alignment in a terminal bubble, and they are a
+ * standing hazard for anything that has to serialise this text. Strip them once
+ * here, at the boundary, rather than in each transport.
+ */
+const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g;
+
+/** Coerce anything into a trimmed, control-character-free string. */
 function str(v: unknown, fallback = ""): string {
   if (v === null || v === undefined) return fallback;
-  if (typeof v === "string") return v.trim() || fallback;
+  if (typeof v === "string") {
+    return v.replace(CONTROL_CHARS, " ").replace(/\s+/g, " ").trim() || fallback;
+  }
   if (typeof v === "number" || typeof v === "boolean") return String(v);
   return fallback;
 }
@@ -156,6 +169,23 @@ function strList(v: unknown): string[] {
 function url(v: unknown): string {
   const s = str(v);
   return /^https?:\/\//i.test(s) ? s : "";
+}
+
+/**
+ * Turn an upstream field name into something a volunteer can read.
+ *
+ * verify.py names fields for what it found — `phone_missing`, `hours_mismatch`
+ * — which is right for the data and wrong in a sentence: "could not verify this
+ * listing's phone_missing". The suffix describes the finding, which the review
+ * already states in words, so it is dropped and underscores become spaces.
+ */
+export function fieldLabel(field: string): string {
+  return (
+    field
+      .replace(/_(missing|mismatch|notfound|not_found|changed|stale)$/i, "")
+      .replace(/_/g, " ")
+      .trim() || field
+  );
 }
 
 /** "feedingseniors.org" — what to label the live side with. */
@@ -527,12 +557,14 @@ function clip(s: string, max: number): string {
 export function askLine(item: ReviewItem): string {
   if (item.kind === "abstention") {
     const what =
-      item.field === "listing" ? "this listing" : `this listing's ${item.field}`;
+      item.field === "listing"
+        ? "this listing"
+        : `this listing's ${fieldLabel(item.field)}`;
     const why = item.reason ? ` (${item.reason})` : "";
     return `The agent could not verify ${what}${why}. Can you check it?`;
   }
   return (
-    `The agent thinks the stored ${item.field} is wrong. ` +
+    `The agent thinks the stored ${fieldLabel(item.field)} is wrong. ` +
     `Should it be changed to "${clip(item.live, 60)}"?`
   );
 }
@@ -591,7 +623,7 @@ export function reviewCard(
   // pressure must never have to work out which of two URLs is which.
   if (item.stored) {
     lines.push(
-      `${item.field}`,
+      `${fieldLabel(item.field)}`,
       `  stored  ${clip(item.stored, 70)}`,
       `          ← ${storedLabel()}${item.listingUrl ? `: ${item.listingUrl}` : ""}`,
     );

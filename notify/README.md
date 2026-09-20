@@ -62,12 +62,35 @@ makes no other network calls. `npm run web` needs no download at all.
 
 ### What you can reply
 
+There are **two kinds of review**, and they ask different questions.
+
+**Discrepancy** — the agent read the org's site and thinks the stored value is
+wrong. There is a proposed replacement.
+
+| Reply | Meaning | Recorded in |
+|---|---|---|
+| `Y` | Yes, change it | `out/approved.json` (a change request) |
+| `N` | No, the agent is wrong | `out/rejected.json` |
+
+**Abstention** — the agent could *not* establish the truth (site unreachable,
+JS-only, ambiguous). There is no proposed replacement, so there is nothing to
+"confirm".
+
+| Reply | Meaning | Recorded in |
+|---|---|---|
+| `R` | Looks right — **your** verification | `out/verified.json` |
+| `F` | Needs fixing | `out/flagged.json` |
+
+A `looks_right` is not a change request and is never written as one. It records
+that a human checked the listing on this date — which, in a directory where 126
+of 138 sampled listings had never been verified even once, is real progress.
+
+Either kind:
+
 | Reply | Meaning |
 |---|---|
-| `Y` | Confirm — the agent is right. Files a change request. |
-| `N` | Reject — the agent is wrong. Logged, so the error is visible. |
 | `S` | Skip — not me, not now. Stays open for another reviewer. |
-| `?` | Show the evidence: the quote, the pages fetched, the blast radius. |
+| `?` | Show everything the agent read. |
 | `queue` | How many reviews are still open. |
 | `help` | The command list. |
 | `stop` | End the session with a summary. |
@@ -90,13 +113,29 @@ printf 'help\n?\nY\nN\nS\nstop\n' | TUICHAT_QUIET=1 npm start
 
 `npm run web` serves two things:
 
+`notify/web.ts` is the whole application server — dashboard, review thread and
+graph explorer, on one port.
+
 | Route | Purpose |
 |---|---|
-| `GET /` | `ui/review.html` |
-| `GET /api/state?since=N` | Everything in the transcript after bubble `N`, plus `ended`, `total`, `remaining` |
-| `POST /api/reply` `{"text":"Y"}` | Submit a reply; returns the full transcript |
+| `GET /` | Dashboard (`ui/index.html`) |
+| `GET /review` | Review thread (`ui/review.html`) |
+| `GET /graph` | Graph explorer (`ui/graph.html`) |
+| `GET /ui/*` | Static passthrough |
+| `GET /api/results` | `out/results.json`, or `{}` |
+| `GET /api/graph` | `out/graph.json`, or `{}` |
+| `GET /api/state` | Recorded decisions + counts |
+| `GET /api/review/current` | The open review, or `{done:true, summary}` |
+| `POST /api/review/reply` | `{"action":"confirm\|reject\|skip\|looks_right\|needs_fixing"}` |
+| `POST /api/run` | `{"budget":5}` — starts the audit pipeline |
+| `GET /api/run/stream` | SSE: one event per stdout line, then `{done, ok}` |
 
-`PORT` (default `8778`) and `HOST` (default `127.0.0.1`) are configurable.
+`PORT` (default `8787`) and `HOST` (default `127.0.0.1`) are configurable.
+
+The pipeline runs under `.venv/bin/python` when it exists, falling back to
+`python3`. That matters: with a bare `python3` FalkorDB is unavailable and the
+graph silently degrades to the in-memory fallback — the run still succeeds,
+which is what makes the mistake easy to miss.
 
 **Why polling, not SSE.** The transcript is an append-only log and the client
 asks for "everything after N". That is stateless on both ends: no hanging

@@ -248,9 +248,15 @@ MATCH p = (s:Node {id: fid})-[*0..%d]-(n:Node)
 RETURN n.id AS id, min(length(p)) AS dist
 """
 
+# Labels render inside a node in ui/graph.html, so they are cut in the query.
+LABEL_CHARS = 40
+
 SUBGRAPH_ATTRS = """
 MATCH (n:Node) WHERE n.id IN $ids
-RETURN n.id AS id, n.kind AS kind, coalesce(n.name, n.value, n.id) AS label
+WITH n, coalesce(n.name, n.value, n.id) AS full
+RETURN n.id AS id, n.kind AS kind,
+       CASE WHEN size(full) > $chars
+            THEN left(full, $chars - 1) + '…' ELSE full END AS label
 """
 
 SUBGRAPH_EDGES = """
@@ -277,7 +283,7 @@ def subgraph(g, focus, hops=2, cap=300, pinned=()):
     keep = order[:cap]
     truncated = len(order) > cap
 
-    attrs = g.query(SUBGRAPH_ATTRS, {"ids": keep}).result_set
+    attrs = g.query(SUBGRAPH_ATTRS, {"ids": keep, "chars": LABEL_CHARS}).result_set
     nodes = [{"id": r[0], "kind": r[1], "label": r[2]} for r in attrs]
     edges = [
         {"source": r[0], "target": r[2], "rel": r[1].lower()}

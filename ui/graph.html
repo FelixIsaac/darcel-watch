@@ -719,8 +719,8 @@
       var sa = byId[a], sb = byId[b];
       if(!sa || !sb) return;   // silently drop dangling edges
       var rel = str(src.rel) || "related";
-      var key = a + " " + b + " " + rel;
-      var rkey = b + " " + a + " " + rel;
+      var key = a + "|" + b + "|" + rel;
+      var rkey = b + "|" + a + "|" + rel;
       if(seenEdge[key] || seenEdge[rkey]) return;
       seenEdge[key] = 1;
       edges.push({ s: sa, t: sb, rel: rel, line: null });
@@ -850,7 +850,6 @@
   function frame(){
     S.raf = 0;
     if(!S.running) return;
-    var settleAt = 0;
     var moved = 0;
     // a couple of physics steps per frame early on, to settle faster
     var steps = S.ticks < 120 ? 2 : 1;
@@ -858,7 +857,16 @@
     draw();
     if(S.ticks >= MAX_TICKS || (S.ticks > 60 && moved < 0.12) || S.alpha < 0.004){
       stopSim();
-      fitToView(true);
+      // Don't steal the framing from a blast/contradiction the user selected
+      // mid-settle — re-frame that cluster instead of the whole graph.
+      if(S.highlight){
+        var ids = [];
+        for(var id in S.highlight){ if(S.highlight[id]) ids.push(id); }
+        if(ids.length) centerOn(ids);
+        else fitToView(true);
+      } else {
+        fitToView(true);
+      }
       return;
     }
     S.raf = requestAnimationFrame(frame);
@@ -1013,7 +1021,7 @@
     S.height = r.height || 640;
   }
 
-  function fitToView(animateNothing){
+  function fitToView(){
     measure();
     if(!S.nodes.length){
       S.view = { x: S.width/2, y: S.height/2, k: 1 };
@@ -1517,6 +1525,13 @@
     measure();
     S.view = { x: S.width/2, y: S.height/2, k: 1 };
     applyView();
+
+    // Paint and frame once, synchronously, before handing over to rAF. If the
+    // page is opened in a background tab the browser pauses rAF entirely, and
+    // without this the graph would sit unpainted at the origin until focused.
+    draw();
+    fitToView();
+
     setStatus(m.truncated ? "truncated" : null);
     startSim(false);
   }
@@ -1534,31 +1549,49 @@
       fallback("the live graph did not respond in time");
     }, 6000);
 
-    var p;
-    try{
-      p = fetch("/api/graph", { headers: { "Accept": "application/json" } });
-    }catch(e){
-      clearTimeout(timer);
-      fallback("the live graph could not be reached", e);
-      return;
-    }
-
-    p.then(function(res){
-      if(!res || !res.ok) throw new Error("bad status " + (res && res.status));
-      return res.json();
-    }).then(function(data){
-      clearTimeout(timer);
+    // One retry before giving up. A single transient blip must not make the
+    // page claim "in-memory" while FalkorDB is in fact serving the graph —
+    // that badge is a truth claim, so it is worth a second attempt.
+    function attempt(triesLeft){
       if(done) return;
-      if(!data || typeof data !== "object" || !arr(data.nodes).length){
-        fallback("/api/graph returned no nodes");
+      var p;
+      try{
+        p = fetch("/api/graph", { headers: { "Accept": "application/json" } });
+      }catch(e){
+        retryOrFail(triesLeft, "the live graph could not be reached", e);
         return;
       }
-      done = true;
-      render(data, false);
-    }).catch(function(err){
+
+      p.then(function(res){
+        if(!res || !res.ok) throw new Error("bad status " + (res && res.status));
+        return res.json();
+      }).then(function(data){
+        if(done) return;
+        if(!data || typeof data !== "object" || !arr(data.nodes).length){
+          clearTimeout(timer);
+          fallback("/api/graph returned no nodes");
+          return;
+        }
+        clearTimeout(timer);
+        done = true;
+        render(data, false);
+      }).catch(function(err){
+        retryOrFail(triesLeft, "the live graph could not be reached", err);
+      });
+    }
+
+    function retryOrFail(triesLeft, reason, err){
+      if(done) return;
+      if(triesLeft > 0){
+        console.warn("/api/graph attempt failed, retrying:", err);
+        setTimeout(function(){ attempt(triesLeft - 1); }, 450);
+        return;
+      }
       clearTimeout(timer);
-      fallback("the live graph could not be reached", err);
-    });
+      fallback(reason, err);
+    }
+
+    attempt(1);
   }
 
   if(document.readyState === "loading"){

@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
-<title>SF Service Guide Watch — review queue</title>
+<title>Review queue — SF Service Guide Watch</title>
 <style>
-  /* Same palette as ui/index.html — these two pages are one product. */
+  /* Same palette as ui/index.html — these pages are one product. */
   :root{
     --bg:#0b0d10;
     --panel:#14181d;
@@ -19,9 +19,8 @@
     --green:#5fd68a;
     --green-dim:#1c2e22;
     --amber:#f0b94d;
+    --amber-dim:#2a2620;
     --accent:#6fa8ff;
-
-    --bubble-in:#1b2027;
     --bubble-out:#2b5fa8;
   }
   *{box-sizing:border-box;}
@@ -32,7 +31,6 @@
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     font-size:16px;
     line-height:1.5;
-    /* Mobile-first: fill the viewport, keep the composer reachable. */
     display:flex;
     flex-direction:column;
     height:100dvh;
@@ -40,251 +38,191 @@
   }
   a{color:var(--accent);}
 
+  /* ---------- shared nav ---------- */
+  nav.app{
+    flex:0 0 auto;
+    display:flex;
+    gap:18px;
+    padding:calc(10px + env(safe-area-inset-top)) 16px 10px;
+    border-bottom:1px solid var(--border);
+    background:#0e1114;
+    font-size:14px;
+  }
+  nav.app a{color:var(--muted);text-decoration:none;padding:2px 0;}
+  nav.app a.active{color:var(--text);font-weight:650;box-shadow:inset 0 -2px 0 var(--accent);}
+
   /* ---------- header ---------- */
   header.top{
     flex:0 0 auto;
-    padding:calc(14px + env(safe-area-inset-top)) 16px 12px;
+    padding:14px 16px 12px;
     border-bottom:1px solid var(--border);
     background:linear-gradient(180deg,#12151a,#0b0d10);
   }
-  .title-row{
-    display:flex;
-    align-items:baseline;
-    justify-content:space-between;
-    gap:12px;
-  }
-  header.top h1{
-    margin:0;
-    font-size:19px;
-    letter-spacing:-0.01em;
-    font-weight:650;
-  }
+  .title-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px;}
+  header.top h1{margin:0;font-size:18px;letter-spacing:-0.01em;font-weight:650;}
   .queue-pill{
-    flex:0 0 auto;
-    font-size:12px;
-    color:var(--muted);
-    background:var(--panel);
-    border:1px solid var(--border);
-    border-radius:20px;
-    padding:3px 11px;
-    white-space:nowrap;
-    font-variant-numeric:tabular-nums;
+    flex:0 0 auto;font-size:12px;color:var(--muted);background:var(--panel);
+    border:1px solid var(--border);border-radius:20px;padding:3px 11px;
+    white-space:nowrap;font-variant-numeric:tabular-nums;
   }
-  header.top p.tagline{
-    margin:4px 0 0 0;
-    color:var(--muted);
-    font-size:13px;
-  }
+  header.top p.tagline{margin:4px 0 0;color:var(--muted);font-size:13px;}
 
   /* ---------- the thread ---------- */
   main{
-    flex:1 1 auto;
-    overflow-y:auto;
-    -webkit-overflow-scrolling:touch;
-    padding:18px 14px 8px;
-    display:flex;
-    flex-direction:column;
-    gap:10px;
+    flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    padding:18px 14px 8px;display:flex;flex-direction:column;gap:12px;
   }
   .row{display:flex;}
   .row.in{justify-content:flex-start;}
   .row.out{justify-content:flex-end;}
+  .stack{display:flex;flex-direction:column;max-width:min(88%,640px);}
+  .meta{font-size:11px;color:var(--muted);margin:0 6px 3px;letter-spacing:.02em;}
+  .row.out .meta{text-align:right;}
 
   .bubble{
-    max-width:min(82%,620px);
-    padding:11px 14px;
-    border-radius:18px;
-    white-space:pre-wrap;
-    overflow-wrap:anywhere;
-    font-size:15px;
+    padding:13px 15px;border-radius:18px;font-size:15px;
     animation:rise .18s ease-out;
   }
   @keyframes rise{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
   @media (prefers-reduced-motion:reduce){.bubble{animation:none;}}
-
   .row.in .bubble{
-    background:var(--bubble-in);
-    border:1px solid var(--border);
+    background:var(--panel2);border:1px solid var(--border);
     border-bottom-left-radius:5px;
-    /* The review card is written as aligned plain text; keep that alignment. */
-    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-    font-size:13.5px;
-    line-height:1.55;
   }
   .row.out .bubble{
-    background:var(--bubble-out);
-    color:#fff;
-    border-bottom-right-radius:5px;
+    background:var(--bubble-out);color:#fff;border-bottom-right-radius:5px;
     font-weight:600;
   }
+  .bubble.plain{white-space:pre-wrap;overflow-wrap:anywhere;}
+  .bubble a{color:var(--accent);}
 
-  .meta{
-    font-size:11px;
-    color:var(--muted);
-    margin:0 6px 2px;
-    letter-spacing:.02em;
+  /* ---------- the review card ---------- */
+  .kind{
+    display:inline-block;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;
+    font-weight:700;padding:3px 9px;border-radius:6px;margin-bottom:9px;
   }
-  .row.out .meta{text-align:right;}
-  .stack{display:flex;flex-direction:column;max-width:100%;}
+  .kind.discrepancy{background:var(--red-dim);color:var(--red);}
+  .kind.abstention{background:var(--amber-dim);color:var(--amber);}
 
-  /* Links inside the agent's cards */
-  .bubble a{color:var(--accent);text-decoration:underline;}
+  .org{font-size:17px;font-weight:650;margin:0 0 3px;letter-spacing:-0.01em;}
+  .rid{font-size:12px;color:var(--muted);margin:0 0 11px;font-variant-numeric:tabular-nums;}
+  .ask{margin:0 0 14px;font-size:15px;}
 
-  .typing{
-    display:flex;gap:4px;align-items:center;
-    padding:12px 16px;
+  /* Two sides, each labelled with where it came from. */
+  .side{
+    border:1px solid var(--border);border-radius:10px;
+    padding:10px 12px;margin-bottom:8px;background:#11151a;
   }
-  .typing span{
-    width:7px;height:7px;border-radius:50%;background:var(--muted);
-    animation:blink 1.2s infinite;
+  .side .side-label{
+    font-size:11px;text-transform:uppercase;letter-spacing:.04em;
+    color:var(--muted);margin-bottom:5px;
   }
+  .side .side-value{
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:14.5px;overflow-wrap:anywhere;
+  }
+  .side.stored .side-value{color:var(--red);}
+  .side.live .side-value{color:var(--green);}
+  .side .side-link{display:inline-block;margin-top:7px;font-size:12.5px;}
+
+  blockquote.quote{
+    margin:12px 0 0;padding:9px 13px;border-left:3px solid var(--accent);
+    background:#0e1114;color:var(--muted);font-size:13.5px;font-style:italic;
+    border-radius:0 8px 8px 0;overflow-wrap:anywhere;
+  }
+  .blast{margin-top:11px;font-size:13px;color:var(--amber);}
+
+  .typing{display:flex;gap:4px;align-items:center;padding:13px 16px;}
+  .typing span{width:7px;height:7px;border-radius:50%;background:var(--muted);animation:blink 1.2s infinite;}
   .typing span:nth-child(2){animation-delay:.2s;}
   .typing span:nth-child(3){animation-delay:.4s;}
   @keyframes blink{0%,60%,100%{opacity:.25;}30%{opacity:1;}}
 
   /* ---------- composer ---------- */
   footer.composer{
-    flex:0 0 auto;
-    border-top:1px solid var(--border);
-    background:var(--panel);
-    padding:10px 12px calc(10px + env(safe-area-inset-bottom));
+    flex:0 0 auto;border-top:1px solid var(--border);background:var(--panel);
+    padding:11px 12px calc(11px + env(safe-area-inset-bottom));
   }
-  .quick{
-    display:flex;
-    gap:7px;
-    overflow-x:auto;
-    padding-bottom:9px;
-    scrollbar-width:none;
-  }
-  .quick::-webkit-scrollbar{display:none;}
+  .prompt{margin:0 2px 9px;font-size:13.5px;font-weight:600;color:var(--muted);}
+  .quick{display:flex;gap:8px;flex-wrap:wrap;}
   .qbtn{
-    flex:0 0 auto;
-    background:var(--panel2);
-    border:1px solid var(--border);
-    color:var(--text);
-    padding:9px 16px;
-    border-radius:20px;
-    font-size:14px;
-    font-weight:600;
-    cursor:pointer;
-    font-family:inherit;
-    /* Comfortable thumb target on a phone. */
-    min-height:40px;
+    flex:1 1 auto;background:var(--panel2);border:1px solid var(--border);
+    color:var(--text);padding:11px 14px;border-radius:12px;font-size:14.5px;
+    font-weight:650;cursor:pointer;font-family:inherit;min-height:46px;
   }
-  .qbtn:active{transform:scale(.97);}
-  .qbtn.yes{background:var(--green-dim);border-color:#2d5c40;color:var(--green);}
-  .qbtn.no{background:var(--red-dim);border-color:#5c2f33;color:var(--red);}
-  .qbtn.skip{color:var(--muted);}
-  .qbtn.why{background:#20242b;border-color:#39424f;color:var(--accent);}
+  .qbtn:active{transform:scale(.98);}
+  .qbtn[data-action="confirm"],.qbtn[data-action="looks_right"]{
+    background:var(--green-dim);border-color:#2d5c40;color:var(--green);
+  }
+  .qbtn[data-action="reject"],.qbtn[data-action="needs_fixing"]{
+    background:var(--red-dim);border-color:#5c2f33;color:var(--red);
+  }
+  .qbtn[data-action="skip"]{color:var(--muted);flex:0 0 auto;}
+  .qbtn.why{background:#20242b;border-color:#39424f;color:var(--accent);flex:0 0 auto;}
   .qbtn:disabled{opacity:.4;cursor:default;}
 
-  .prompt{
-    margin:0 2px 9px;
-    font-size:13.5px;
-    font-weight:600;
-    color:var(--muted);
-    letter-spacing:.01em;
-  }
-
-  /* Typing is optional — the buttons are the primary path, so the text
-     field is tucked away rather than competing with them. */
-  details.typed{margin-top:9px;}
+  details.typed{margin-top:10px;}
   details.typed summary{
-    cursor:pointer;
-    color:var(--muted);
-    font-size:12.5px;
-    list-style:none;
-    padding:2px 0;
+    cursor:pointer;color:var(--muted);font-size:12.5px;list-style:none;padding:2px 0;
   }
   details.typed summary::-webkit-details-marker{display:none;}
   details.typed summary::before{content:"⌨  ";}
-  details.typed[open] summary{margin-bottom:8px;}
-
-  .input-row{display:flex;gap:8px;}
+  .input-row{display:flex;gap:8px;margin-top:8px;}
   #input{
-    flex:1 1 auto;
-    background:var(--bg);
-    border:1px solid var(--border);
-    color:var(--text);
-    border-radius:20px;
-    padding:11px 16px;
-    font-size:16px; /* 16px stops iOS zooming on focus */
-    font-family:inherit;
-    min-width:0;
+    flex:1 1 auto;background:var(--bg);border:1px solid var(--border);color:var(--text);
+    border-radius:12px;padding:11px 14px;font-size:16px;font-family:inherit;min-width:0;
   }
   #input:focus{outline:none;border-color:var(--accent);}
   #send{
-    flex:0 0 auto;
-    background:var(--accent);
-    border:none;
-    color:#0b0d10;
-    font-weight:700;
-    border-radius:20px;
-    padding:0 20px;
-    font-size:15px;
-    cursor:pointer;
-    font-family:inherit;
+    flex:0 0 auto;background:var(--accent);border:none;color:#0b0d10;font-weight:700;
+    border-radius:12px;padding:0 18px;font-size:15px;cursor:pointer;font-family:inherit;
     min-height:44px;
   }
-  #send:disabled{opacity:.4;cursor:default;}
-
-  .note{
-    margin:9px 2px 0;
-    font-size:11.5px;
-    color:var(--muted);
-    text-align:center;
-    line-height:1.45;
-  }
-  .offline{
-    display:none;
-    margin:8px 2px 0;
-    font-size:12px;
-    color:var(--amber);
-    text-align:center;
-  }
+  .note{margin:10px 2px 0;font-size:11.5px;color:var(--muted);text-align:center;line-height:1.45;}
+  .offline{display:none;margin:8px 2px 0;font-size:12px;color:var(--amber);text-align:center;}
   body.disconnected .offline{display:block;}
 
   @media (min-width:700px){
     main{padding:24px 24px 12px;}
-    header.top{padding:20px 24px 14px;}
-    footer.composer{padding:12px 24px calc(12px + env(safe-area-inset-bottom));}
-    header.top h1{font-size:21px;}
+    header.top,nav.app{padding-left:24px;padding-right:24px;}
+    footer.composer{padding:14px 24px calc(14px + env(safe-area-inset-bottom));}
   }
 </style>
 </head>
 <body>
 
+<nav class="app">
+  <a href="/">Dashboard</a>
+  <a href="/review" class="active">Review</a>
+  <a href="/graph">Graph</a>
+</nav>
+
 <header class="top">
   <div class="title-row">
     <h1>SF Service Guide Watch</h1>
-    <span class="queue-pill" id="pill">connecting…</span>
+    <span class="queue-pill" id="pill">loading…</span>
   </div>
-  <p class="tagline">SF Service Guide review queue · you are the human in the loop</p>
+  <p class="tagline">You are the human in the loop.</p>
 </header>
 
 <main id="thread" aria-live="polite" aria-label="Review conversation"></main>
 
 <footer class="composer">
-  <p class="prompt" id="prompt">Should this listing be changed?</p>
-  <div class="quick" id="quick">
-    <button class="qbtn yes"  data-send="Y">Yes, change it</button>
-    <button class="qbtn no"   data-send="N">No, leave it</button>
-    <button class="qbtn skip" data-send="S">Skip</button>
-    <button class="qbtn why"  data-send="?">Show evidence</button>
-    <button class="qbtn"      data-send="stop">End session</button>
-  </div>
-  <details class="typed">
+  <p class="prompt" id="prompt">&nbsp;</p>
+  <div class="quick" id="quick"></div>
+  <details class="typed" id="typed">
     <summary>Or type a reply</summary>
     <div class="input-row">
       <input id="input" type="text" autocomplete="off" autocapitalize="off"
-             autocorrect="off" spellcheck="false" placeholder="Y, N, S, ?, queue, help, stop"
-             aria-label="Your reply">
+             autocorrect="off" spellcheck="false"
+             placeholder="Y, N, R, F, S, ?, help" aria-label="Your reply">
       <button id="send">Send</button>
     </div>
   </details>
   <p class="offline" id="offline">Lost the server. Retrying…</p>
   <p class="note">
-    Confirmed reviews are written to <strong>out/approved.json</strong> for a human to submit.<br>
+    Confirmed changes are written to <strong>out/approved.json</strong>; your verifications to
+    <strong>out/verified.json</strong>.<br>
     SF Service Guide Watch never writes to sfserviceguide.org.
   </p>
 </footer>
@@ -293,187 +231,284 @@
 (function () {
   "use strict";
 
-  var thread  = document.getElementById("thread");
-  var input   = document.getElementById("input");
-  var sendBtn = document.getElementById("send");
-  var quick   = document.getElementById("quick");
-  var pill    = document.getElementById("pill");
-  var prompt  = document.getElementById("prompt");
-  var typed   = document.querySelector("details.typed");
+  var thread = document.getElementById("thread");
+  var quick  = document.getElementById("quick");
+  var prompt = document.getElementById("prompt");
+  var pill   = document.getElementById("pill");
+  var input  = document.getElementById("input");
+  var send   = document.getElementById("send");
+  var typed  = document.getElementById("typed");
 
-  var since = 0;          // highest bubble seq we have rendered
-  var ended = false;
   var typingEl = null;
-  var inFlight = false;
+  var busy = false;
+  var finished = false;
 
-  /* ---------- rendering ---------- */
+  /* ---------- small DOM helpers ----------
+     Everything is built with DOM APIs; nothing from the server is ever parsed
+     as HTML, so a scraped quote containing markup cannot inject anything. */
 
-  // Build bubbles with DOM APIs only — nothing from the server is ever parsed
-  // as HTML, so a scraped quote containing markup can't inject anything.
-  function linkify(body, into) {
-    var re = /https?:\/\/[^\s)]+/g;
-    var last = 0, m;
-    while ((m = re.exec(body)) !== null) {
-      if (m.index > last) into.appendChild(document.createTextNode(body.slice(last, m.index)));
-      var a = document.createElement("a");
-      a.href = m[0];
-      a.textContent = m[0];
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-      into.appendChild(a);
-      last = m.index + m[0].length;
-    }
-    if (last < body.length) into.appendChild(document.createTextNode(body.slice(last)));
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined && text !== null) n.textContent = text;
+    return n;
   }
 
-  function addBubble(from, body) {
-    var row = document.createElement("div");
-    row.className = "row " + (from === "agent" ? "in" : "out");
-
-    var stack = document.createElement("div");
-    stack.className = "stack";
-
-    var meta = document.createElement("div");
-    meta.className = "meta";
-    meta.textContent = from === "agent" ? "SF Service Guide Watch" : "You";
-    stack.appendChild(meta);
-
-    var bubble = document.createElement("div");
-    bubble.className = "bubble";
-    if (from === "agent") linkify(body, bubble);
-    else bubble.textContent = body;
-    stack.appendChild(bubble);
-
-    row.appendChild(stack);
-    thread.appendChild(row);
-    scrollDown();
+  function link(href, text) {
+    var a = el("a", null, text || href);
+    a.href = href;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    return a;
   }
 
   function scrollDown() {
     requestAnimationFrame(function () { thread.scrollTop = thread.scrollHeight; });
   }
 
+  function addRow(who, node) {
+    var row = el("div", "row " + (who === "you" ? "out" : "in"));
+    var stack = el("div", "stack");
+    stack.appendChild(el("div", "meta", who === "you" ? "You" : "SF Service Guide Watch"));
+    stack.appendChild(node);
+    row.appendChild(stack);
+    thread.appendChild(row);
+    scrollDown();
+    return row;
+  }
+
+  /* Plain text bubble, with bare URLs turned into links. */
+  function addText(who, body) {
+    var b = el("div", "bubble plain");
+    var re = /https?:\/\/[^\s)]+/g, last = 0, m;
+    while ((m = re.exec(body)) !== null) {
+      if (m.index > last) b.appendChild(document.createTextNode(body.slice(last, m.index)));
+      b.appendChild(link(m[0]));
+      last = m.index + m[0].length;
+    }
+    if (last < body.length) b.appendChild(document.createTextNode(body.slice(last)));
+    return addRow(who, b);
+  }
+
   function showTyping() {
     if (typingEl) return;
-    typingEl = document.createElement("div");
-    typingEl.className = "row in";
-    var b = document.createElement("div");
-    b.className = "bubble typing";
-    b.setAttribute("aria-label", "SF Service Guide Watch is typing");
-    for (var i = 0; i < 3; i++) b.appendChild(document.createElement("span"));
+    var b = el("div", "bubble typing");
+    b.setAttribute("aria-label", "working");
+    for (var i = 0; i < 3; i++) b.appendChild(el("span"));
+    typingEl = el("div", "row in");
     typingEl.appendChild(b);
     thread.appendChild(typingEl);
     scrollDown();
   }
-
   function hideTyping() {
     if (typingEl && typingEl.parentNode) typingEl.parentNode.removeChild(typingEl);
     typingEl = null;
   }
 
-  function setEnded(state) {
-    ended = !!state.ended;
+  /* ---------- the review card ---------- */
 
-    // Progress reads as "how far through am I", not "how much is left in a
-    // shared pool" — the reviewer is measuring their own session.
-    if (state.empty) pill.textContent = "nothing to review";
-    else if (ended)  pill.textContent = "done · " + state.reviewed + " of " + state.total;
-    else             pill.textContent = "review " + (state.reviewed + 1) + " of " + state.total;
-
-    prompt.textContent = state.empty
-      ? "There is nothing waiting for a reviewer right now."
-      : ended
-        ? "Session finished — thank you."
-        : "Should this listing be changed?";
-
-    input.disabled = ended;
-    sendBtn.disabled = ended;
-    var btns = quick.querySelectorAll(".qbtn");
-    for (var i = 0; i < btns.length; i++) btns[i].disabled = ended;
-    if (ended) {
-      input.placeholder = "Session ended";
-      quick.style.display = "none";
-      typed.style.display = "none";
+  function sideBlock(cls, label, value, href, hrefText) {
+    var box = el("div", "side " + cls);
+    box.appendChild(el("div", "side-label", label));
+    box.appendChild(el("div", "side-value", value));
+    if (href) {
+      var a = link(href, hrefText);
+      a.className = "side-link";
+      box.appendChild(a);
     }
+    return box;
   }
 
-  /* ---------- talking to the server ---------- */
+  function addReview(item) {
+    var b = el("div", "bubble");
 
-  function apply(state) {
-    if (state.messages && state.messages.length) {
-      hideTyping();
-      for (var i = 0; i < state.messages.length; i++) {
-        var m = state.messages[i];
-        addBubble(m.from, m.body);
-        if (m.seq > since) since = m.seq;
-      }
+    b.appendChild(el("span", "kind " + item.kind,
+      item.kind === "abstention" ? "could not verify" : "possible error"));
+
+    b.appendChild(el("p", "org", item.name));
+    b.appendChild(el("p", "rid",
+      "Listing #" + item.resource_id + " · review " + item.position + " of " + item.total));
+    b.appendChild(el("p", "ask", item.ask));
+
+    // The listing side. Always labelled as SF Service Guide so there is no
+    // ambiguity about which of the two links is which.
+    if (item.stored) {
+      b.appendChild(sideBlock("stored",
+        item.field + " — currently listed on " + item.stored_label,
+        item.stored,
+        item.listing_url, "View the listing"));
+    } else if (item.listing_url) {
+      b.appendChild(sideBlock("stored", "The listing on " + item.stored_label,
+        "(no value recorded)", item.listing_url, "View the listing"));
     }
-    setEnded(state);
+
+    // The evidence side. Only rendered when there is a genuinely different
+    // live value — an abstention is not a diff and is never shown as one.
+    if (item.live) {
+      b.appendChild(sideBlock("live",
+        "found on " + item.live_label,
+        item.live,
+        item.source_url, "View the source page"));
+    } else if (item.org_website) {
+      b.appendChild(sideBlock("live", "Their website",
+        item.org_host || item.org_website,
+        item.org_website, "Open their website"));
+    }
+
+    if (item.source_quote) {
+      b.appendChild(el("blockquote", "quote", "“" + item.source_quote + "”"));
+    }
+    if (item.blast_radius > 0) {
+      b.appendChild(el("p", "blast",
+        "If this is wrong, " + item.blast_radius + " other listing(s) are wrong too."));
+    }
+
+    addRow("agent", b);
+  }
+
+  /* ---------- buttons ---------- */
+
+  function renderActions(item) {
+    quick.innerHTML = "";
+    if (!item) return;
+    item.actions.forEach(function (a) {
+      var btn = el("button", "qbtn", a.label);
+      btn.setAttribute("data-action", a.action);
+      quick.appendChild(btn);
+    });
+    var why = el("button", "qbtn why", "Show evidence");
+    why.setAttribute("data-action", "__evidence");
+    quick.appendChild(why);
+  }
+
+  function setFinished(state) {
+    finished = true;
+    quick.innerHTML = "";
+    typed.style.display = "none";
+    var r = (state.summary && state.summary.recorded) || {};
+    var done = (r.confirmed || 0) + (r.rejected || 0) + (r.verified || 0) + (r.flagged || 0);
+    pill.textContent = state.empty ? "nothing to review" : "all done";
+    prompt.textContent = state.empty
+      ? "There is nothing waiting for a reviewer right now."
+      : "Session finished — thank you. " + done + " listing(s) recorded in total.";
+  }
+
+  /* ---------- server ---------- */
+
+  function apply(state, opts) {
+    opts = opts || {};
+    hideTyping();
+
+    if (opts.result && opts.result.message) {
+      addText("agent", opts.result.message);
+    }
+
+    if (state.done) {
+      if (state.summary && state.summary.text && !opts.quiet) {
+        addText("agent", state.summary.text);
+      } else if (state.empty && state.empty_reason) {
+        addText("agent", "Nothing to review right now.\n\n" + state.empty_reason);
+      }
+      setFinished(state);
+      return;
+    }
+
+    var item = state.item;
+    addReview(item);
+    renderActions(item);
+    pill.textContent = "review " + item.position + " of " + item.total;
+    prompt.textContent = item.kind === "abstention"
+      ? "Can you check this listing?"
+      : "Should this listing be changed?";
     document.body.classList.remove("disconnected");
   }
 
-  function poll() {
-    if (inFlight) return Promise.resolve();
-    inFlight = true;
-    return fetch("/api/state?since=" + since, { cache: "no-store" })
-      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
-      .then(apply)
-      .catch(function () { document.body.classList.add("disconnected"); })
-      .then(function () { inFlight = false; });
+  function load() {
+    fetch("/api/review/current", { cache: "no-store" })
+      .then(function (r) { return r.json(); })
+      .then(function (s) { apply(s, { quiet: false }); })
+      .catch(function () { document.body.classList.add("disconnected"); });
   }
 
-  function send(text) {
-    if (!text || ended) return;
-    var body = String(text).trim();
-    if (!body) return;
-
-    // Echo optimistically so the tap feels instant; the poll reconciles from
-    // the server's log, which is the record that actually counts.
-    addBubble("volunteer", body);
-    input.value = "";
+  function reply(action) {
+    if (busy || finished) return;
+    busy = true;
     showTyping();
-
-    fetch("/api/reply", {
+    fetch("/api/review/reply", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text: body })
+      body: JSON.stringify({ action: action })
     })
       .then(function (r) { return r.json(); })
-      .then(function (state) {
-        // The server replays the whole transcript on reply. Our optimistic
-        // echo is already on screen, so rewind and rebuild from the truth.
-        hideTyping();
-        thread.innerHTML = "";
-        since = 0;
-        apply(state);
+      .then(function (s) {
+        busy = false;
+        // An action the server refused (wrong kind for this review) leaves the
+        // same review open — say why and re-render nothing.
+        if (s.result && !s.result.ok) {
+          hideTyping();
+          addText("agent", s.result.message);
+          return;
+        }
+        apply(s, { result: s.result });
       })
       .catch(function () {
+        busy = false;
         hideTyping();
         document.body.classList.add("disconnected");
       });
+  }
+
+  function showEvidence() {
+    if (busy || finished) return;
+    fetch("/api/review/current", { cache: "no-store" })
+      .then(function (r) { return r.json(); })
+      .then(function (s) {
+        if (s.item && s.item.evidence) addText("agent", s.item.evidence);
+      })
+      .catch(function () { document.body.classList.add("disconnected"); });
   }
 
   /* ---------- input ---------- */
 
   quick.addEventListener("click", function (e) {
     var btn = e.target.closest ? e.target.closest(".qbtn") : null;
-    if (btn && !btn.disabled) send(btn.getAttribute("data-send"));
+    if (!btn || btn.disabled) return;
+    var a = btn.getAttribute("data-action");
+    addText("you", btn.textContent);
+    if (a === "__evidence") showEvidence();
+    else reply(a);
   });
 
-  sendBtn.addEventListener("click", function () { send(input.value); });
+  function submitTyped() {
+    var v = input.value.trim();
+    if (!v) return;
+    input.value = "";
+    addText("you", v);
 
+    var w = v.toLowerCase().replace(/^\//, "").split(/\s+/)[0];
+    if (w === "?" || w.charAt(0) === "?") { showEvidence(); return; }
+    if (w === "help") {
+      addText("agent",
+        "Buttons do everything. If you prefer typing:\n" +
+        "  Y  yes, change it        N  no, leave it\n" +
+        "  R  looks right           F  needs fixing\n" +
+        "  S  skip                  ?  show evidence");
+      return;
+    }
+    var map = { y: "confirm", yes: "confirm", n: "reject", no: "reject",
+                s: "skip", skip: "skip", r: "looks_right", f: "needs_fixing",
+                confirm: "confirm", reject: "reject",
+                looks_right: "looks_right", needs_fixing: "needs_fixing" };
+    if (map[w]) reply(map[w]);
+    else addText("agent", "Didn't catch that — the buttons above are the easy way.");
+  }
+
+  send.addEventListener("click", submitTyped);
   input.addEventListener("keydown", function (e) {
-    if (e.key === "Enter") { e.preventDefault(); send(input.value); }
+    if (e.key === "Enter") { e.preventDefault(); submitTyped(); }
   });
 
-  /* ---------- go ---------- */
-
-  poll();
-  setInterval(function () { if (!ended) poll(); }, 900);
-  // A backgrounded phone tab stops its timers; catch up the moment it returns.
-  document.addEventListener("visibilitychange", function () {
-    if (!document.hidden && !ended) poll();
-  });
+  load();
 })();
 </script>
 </body>

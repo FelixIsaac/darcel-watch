@@ -1,6 +1,10 @@
-"""Cross-check: FalkorDB backend vs the in-memory graph, same records.
+"""Proves graph_falkor.py (Cypher) and graph.py (adjacency dict) agree exactly.
 
-    .venv/bin/python crosscheck.py
+Run it with `.venv/bin/python crosscheck.py`, FalkorDB up. It builds both
+backends from the same harvested records and compares every query: node ids,
+blast_radius for all 156 orgs, contradictions in full, propagate_staleness from
+every org, and the out/graph.json subgraph export. Zero mismatches means the
+FalkorDB port changed no results - which is what makes the fallback honest.
 
 Compares all three queries over every org in the corpus. Any difference is a
 real bug in one of the two implementations.

@@ -35,6 +35,11 @@ CRITICAL = (
 )
 
 
+# Node labels render inside a node in ui/graph.html. Must match
+# graph_falkor.LABEL_CHARS so both backends emit the same file.
+LABEL_CHARS = 40
+
+
 def graph_falkor_endpoint():
     host = os.environ.get("FALKORDB_HOST", "localhost")
     return f"{host}:{os.environ.get('FALKORDB_PORT', '6379')}"
@@ -72,15 +77,14 @@ def memory_subgraph(g, focus, hops=2, cap=300, pinned=()):
         if b in kept and g.nodes[b]["kind"] == HEAD[rel]
     }
 
+    def label(n):
+        full = (g.nodes[n].get("name") or g.nodes[n].get("number")
+                or g.nodes[n].get("text") or n)
+        return full if len(full) <= LABEL_CHARS else full[: LABEL_CHARS - 1] + "…"
+
     return {
         "nodes": [
-            {
-                "id": n,
-                "kind": g.nodes[n]["kind"],
-                "label": g.nodes[n].get("name") or g.nodes[n].get("number")
-                or g.nodes[n].get("text") or n,
-            }
-            for n in keep
+            {"id": n, "kind": g.nodes[n]["kind"], "label": label(n)} for n in keep
         ],
         "edges": [{"source": a, "target": b, "rel": rel} for a, b, rel in sorted(edges)],
         "truncated": truncated,

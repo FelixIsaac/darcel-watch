@@ -31,27 +31,49 @@ The gap isn't discovery. It's freshness. A wrong shelter address at 9pm is worse
 
 ## What we found
 
-A live run with Gemini adjudication checked the 15 highest-priority listings: **1 discrepancy, 9 abstained, 5 matched.** The one confirmed discrepancy: Meals on Wheels of Alameda County — stored `5106544000105` (an extension jammed onto the digits), live `510.777.9560`. Confidence 0.95.
+### The headline finding needs no model
 
-We caught two of our own bugs by reading the pipeline's actual output, not by any test.
+Before any Gemini call, a plain arithmetic check on the stored data itself — no scraping, no model, just counting digits — found this across the 138 approved listings in our sample:
 
-**A false positive in the model's judgment.** The first version of our prompt flagged Sutter Health at confidence 1.0 for a phone "mismatch" — stored `800-478-8837`, live page showed `916-297-9000`. That live number was scraped off a careers page. It's a hiring line, not a replacement main number. Different numbers isn't the same thing as one being wrong. We rewrote the prompt to judge purpose, not difference: does the live number plausibly replace the stored one for the *same* purpose, and abstain if context says otherwise (careers, fax, donations, a department, a second location). After the fix, Sutter Health correctly abstains: *"The live number is presented in the context of a hiring process, which is a different purpose."*
+```
+approved listings scanned : 138
+phone numbers stored      : 189
+NOT dialable as stored    : 24  (13%)
+  truncated (<10 digits)  : 20
+  extension run into no.  :  4
+listings affected         : 19 of 138
+```
 
-**A self-referential bug in our own code.** Oakland Healthcare & Wellness was initially shown to a reviewer as a discrepancy: `address: stored "3030 Webster St. Oakland 94609" → live "3030 Webster St. Oakland 94609"` — a proposed change to the exact same value. The adjudicator had reasoned about a field (phone) that no gathered evidence actually covered, and our change-request builder fell through to whatever finding was first available, whether or not it genuinely differed. Fixed by requiring a field to actually differ before it's emitted, and downgrading to abstain when nothing gathered is actionable. Oakland Healthcare & Wellness now correctly abstains: *"Adjudicator flagged a problem but no gathered field actually differs, so there is nothing to act on."*
+Twenty numbers are stored with the area code stripped off, too short to dial. Real examples: `08741653` (Oakland Housing Authority, Voice), `02678800` (Alameda County Family Justice Center, Phone), `82177080` (Foster Care Mental Health, Phone), `05621141` (Teen Challenge Oakland Men's Center, Main), `07779560` (Meals on Wheels of Alameda County, Main Line), `02508000` (Oakland Healthcare & Wellness, Phone). A family justice centre — domestic violence services — with a phone number nobody can call.
 
-We're telling both stories because they're a stronger claim about the remaining numbers than getting it right the first time would have been. The regex evidence-gatherer is deliberately dumb; the model is the judge, and the prompt (and our own code) both have to encode what "wrong" actually means, not just "different."
+This check is arithmetic on digit counts. No model, no scraping, no judgment call, and therefore no false-positive risk. That's the argument for the whole design: use the cheap deterministic check where it's sufficient by itself, and reserve the model for judgment calls a digit count can't make.
+
+### The Gemini-adjudicated run
+
+Checked the 15 highest-priority listings: **1 discrepancy, 7 abstained, 7 matched.** The one confirmed discrepancy: Oakland Healthcare & Wellness — stored `02508000` (8 digits, undialable), live `510.250.8000`. Confidence 0.95.
+
+### Three of our own bugs, caught by looking, none by tests
+
+**1. A false positive in the model's judgment.** The first version of our prompt flagged Sutter Health at confidence 1.0 for a phone "mismatch" — stored `800-478-8837`, live page showed `916-297-9000`. That live number was scraped off a careers page: a hiring line, not a replacement main number. Different numbers isn't the same thing as one being wrong. We rewrote the prompt to judge purpose, not difference: does the live number plausibly replace the stored one for the *same* purpose, and abstain if context says otherwise (careers, fax, donations, a department, a second location). After the fix, Sutter Health correctly abstains: *"The live number is presented in the context of a hiring process, which is a different purpose."*
+
+**2. A self-referential bug in our own code.** Oakland Healthcare & Wellness was initially shown to a reviewer as a discrepancy: `address: stored "3030 Webster St. Oakland 94609" → live "3030 Webster St. Oakland 94609"` — a proposed change to the exact same value. The adjudicator reasoned about a field (phone) that no gathered evidence covered, and our change-request builder fell through to whatever finding was first available, whether or not it genuinely differed. Fixed by requiring a field to actually differ before it's emitted, and downgrading to abstain when nothing gathered is actionable.
+
+**3. A false positive in our own headline finding, caught by a human.** We first flagged Meals on Wheels of Alameda County for a phone mismatch — stored `5106544000105`, live `510.777.9560` — and proposed replacing the stored number. A human opened the actual listing: the site already lists `(510) 777-9560` as its Main Line. The listing carries ten phone numbers, one per programme or region, and `5106544000105` is `(510) 654-4000 ext. 105` — the J-Sei Nutrition Services line, correctly stored. Our own `check_phone` only ever compared the *first* stored number, skipped the differently-malformed main line, and never checked the other nine. Fixed by comparing against every stored number, and reporting an unmatched live number as a possible *addition* rather than a replacement when a listing carries many numbers.
+
+That third bug is the strongest argument for the human-in-the-loop design in this whole project: the human in our loop caught the agent, exactly as designed. Nothing here ships straight to ShelterTech. Every output is a candidate, and this is what "candidate" is for.
 
 ## Challenges we ran into
 
 - Distinguishing an actually-stale listing from a slow/JS-only/bot-blocking website. We cap fetches, check for real readable text, and abstain rather than guess when a site doesn't give us enough.
-- Catching our own false positive. Gemini flagged Sutter Health at confidence 1.0 for a phone "mismatch" that was actually a careers-page number — different purpose, not a wrong record. We only caught it because we read the output instead of trusting the confidence score. Fixed by rewriting the prompt to judge purpose, not just difference.
+- Catching our own mistakes across two different layers. Gemini flagged Sutter Health at confidence 1.0 for a phone "mismatch" that was actually a careers-page number. Separately, our own `check_phone` compared only the first of ten stored numbers for Meals on Wheels of Alameda County and proposed replacing a number that was already correct. Neither was caught by a test — both were caught by a human reading the actual output and checking it against the real listing.
 - Building a graph model in the time available without pulling in a database — an adjacency dict is the right scale-appropriate answer for 1,759 nodes, but we had to be disciplined about which queries actually need graph structure versus which are just filters.
 
 ## Accomplishments we're proud of
 
 - We searched first and found the real gap instead of shipping a duplicate directory.
 - We measured the gap live during the hackathon against production data, not a claim from a blog post.
-- We caught two of our own bugs by reading the output, not by being told or by a test — a model false positive and a self-referential change-request bug — and fixed the root cause in each, not just the one case.
+- Our strongest finding needed no model at all: a deterministic digit-count check found 24 of 189 stored phone numbers (13%) are undialable as stored, including a domestic-violence family justice centre.
+- We caught three of our own bugs by reading the output, never by a test — two in the model's judgment and one in our own comparison logic — and fixed the root cause in each, not just the one case. The third was caught by a human opening the real listing: exactly what the human-in-the-loop design is for.
 - Every output in the review queue carries a source URL and a verbatim quote — no quote, no claim.
 - We're honest about what we didn't use: no FalkorDB, no direct-Google API call in the run we demoed, no production writes. We say so plainly instead of overclaiming.
 
@@ -72,9 +94,10 @@ Prior-art search is itself the highest-leverage hour of a hackathon. The organis
 |---|---|
 | 0:00–0:15 | "We set out to build an AI resource finder for SF. Then we searched — it already exists." Show sfserviceguide.org, mention 1,759 orgs / 16,000 monthly users. |
 | 0:15–0:35 | "So we measured what's actually broken." Show the table: 156 sampled → 138 approved → 126 never verified, 12 verified a median of 7.8 years ago, zero in the past year. |
-| 0:35–0:55 | Show the Mermaid pipeline diagram, walk it left to right: harvest → graph (1,158 nodes, 9 contradictions found) → triage (cheap, model-free) → verify (agentic evidence loop) → Gemini 2.5 Flash via OpenRouter adjudicates → ranked by blast radius, emits a change request, never a POST. |
-| 0:55–1:15 | Live: open the review UI, show the 1 confirmed discrepancy (an undialable phone number). Then tell both bug stories briefly — Sutter Health, a model false positive fixed by rewriting the prompt to judge purpose not difference; and Oakland Healthcare & Wellness, a self-referential change request ("change this address to itself") fixed by requiring a field to actually differ before it's emitted. Both correctly abstain now. |
-| 1:15–1:30 | Close: "This isn't a 16th directory. It's fewer volunteer-hours to keep the one that exists honest. Next step: give it to ShelterTech." |
+| 0:35–0:50 | The headline finding needs no model: a digit-count check on 189 stored phone numbers finds 24 (13%) undialable as stored — including a domestic-violence family justice centre. No scraping, no judgment call, zero false-positive risk. |
+| 0:50–1:05 | Show the Mermaid pipeline diagram, walk it left to right: harvest → graph (1,158 nodes, 9 contradictions found) → triage (cheap, model-free) → verify (agentic evidence loop) → Gemini 2.5 Flash via OpenRouter adjudicates → ranked by blast radius, emits a change request, never a POST. |
+| 1:05–1:25 | Live: open the review UI, show the 1 confirmed discrepancy. Then tell the strongest bug story: we flagged Meals on Wheels for a "wrong" phone number, and a human opened the real listing and found the number was already correctly stored — our code only checked the first of ten numbers. The human in the loop caught the agent, exactly as designed. |
+| 1:25–1:30 | Close: "This isn't a 16th directory. It's fewer volunteer-hours to keep the one that exists honest. Next step: give it to ShelterTech." |
 
 ## Anticipated judge questions
 
@@ -94,7 +117,7 @@ No. Every request is a GET. Change requests are written to a local file for a hu
 We don't claim it is — we claim it's fresher and evidenced. Every flagged item carries a live source URL and a verbatim quote a volunteer can check in seconds, which is faster than the datathon process re-deriving it from scratch. The system is also honest about not knowing: abstention is reported as a metric, not hidden.
 
 **Didn't Gemini get one wrong (Sutter Health)?**
-Yes, on our first prompt version — flagged at confidence 1.0 for a number that was actually a careers-page line, not a replacement main number. We caught it by reading our own output, rewrote the prompt to judge whether the live number serves the *same purpose* as the stored one rather than just checking for a difference, and it now correctly abstains with a stated reason. We found a second, different-class bug the same way: our own code was proposing "change this address to itself" for Oakland Healthcare & Wellness, because the change-request builder didn't check that the field it was emitting actually differed. Fixed the same day. We're showing both because they're the strongest evidence that our abstention design does real work, not because we're proud of either miss.
+Yes, on our first prompt version — flagged at confidence 1.0 for a number that was actually a careers-page line, not a replacement main number. We caught it by reading our own output, rewrote the prompt to judge whether the live number serves the *same purpose* as the stored one rather than just checking for a difference, and it now correctly abstains with a stated reason. We found two more bugs the same way: our own code proposing "change this address to itself" for Oakland Healthcare & Wellness (a change-request builder that didn't check the field actually differed), and a comparison bug that flagged Meals on Wheels of Alameda County for a "wrong" phone number that was already correctly stored elsewhere on the same listing — our code only checked the first of ten stored numbers. That last one was caught by a human opening the real listing, not by any code we wrote: the human in the loop caught the agent, which is the point of shipping a review queue instead of an auto-updater. We're showing all three because they're the strongest evidence our abstention and review design does real work, not because we're proud of any of the misses.
 
 **Are you calling Gemini directly through Google's API?**
 No — our live run goes through OpenRouter (`google/gemini-2.5-flash`). The code also has a direct-Google-AI-Studio path that activates on a Google-shaped key, but we didn't exercise it in the run we're demoing. Same model and prompt either way; only the transport differs.
