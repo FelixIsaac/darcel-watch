@@ -103,6 +103,13 @@
   }
   .kind.discrepancy{background:var(--red-dim);color:var(--red);}
   .kind.abstention{background:var(--amber-dim);color:var(--amber);}
+  .kind.structural{background:#2a1f33;color:#c99bff;}
+  .defect-list{margin:0;padding:0;list-style:none;}
+  .defect-list li{
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:14px;color:var(--red);padding:3px 0;overflow-wrap:anywhere;
+  }
+  .defect-why{margin-top:7px;font-size:13px;color:var(--amber);}
 
   .org{font-size:17px;font-weight:650;margin:0 0 3px;letter-spacing:-0.01em;}
   .rid{font-size:12px;color:var(--muted);margin:0 0 11px;font-variant-numeric:tabular-nums;}
@@ -195,6 +202,7 @@
   <a href="/">Dashboard</a>
   <a href="/review" class="active">Review</a>
   <a href="/graph">Graph</a>
+        <a href="/freshness">Freshness</a>
 </nav>
 
 <header class="top">
@@ -322,13 +330,43 @@
   function addReview(item) {
     var b = el("div", "bubble");
 
-    b.appendChild(el("span", "kind " + item.kind,
-      item.kind === "abstention" ? "could not verify" : "possible error"));
+    var kindWord = item.kind === "abstention" ? "could not verify"
+                 : item.kind === "structural" ? "unusable as stored"
+                 : "possible error";
+    b.appendChild(el("span", "kind " + item.kind, kindWord));
 
     b.appendChild(el("p", "org", item.name));
     b.appendChild(el("p", "rid",
       "Listing #" + item.resource_id + " · review " + item.position + " of " + item.total));
     b.appendChild(el("p", "ask", item.ask));
+
+    // A structural finding has ONE side. There is no proposed value, so there
+    // is no diff and no arrow — showing `defect` as a replacement is exactly
+    // the nonsense this branch exists to prevent.
+    if (item.structural) {
+      var box = el("div", "side stored");
+      box.appendChild(el("div", "side-label",
+        item.field + " as stored on " + item.stored_label));
+      var ul = el("ul", "defect-list");
+      String(item.stored).split(";").forEach(function (part) {
+        var t = part.trim();
+        if (t) ul.appendChild(el("li", null, t));
+      });
+      box.appendChild(ul);
+      if (item.defect) box.appendChild(el("div", "defect-why", item.defect));
+      if (item.listing_url) {
+        var a = link(item.listing_url, "View the listing");
+        a.className = "side-link";
+        box.appendChild(a);
+      }
+      b.appendChild(box);
+      if (item.blast_radius > 0) {
+        b.appendChild(el("p", "blast",
+          "If this is wrong, " + item.blast_radius + " other listing(s) are wrong too."));
+      }
+      addRow("agent", b);
+      return;
+    }
 
     // The listing side. Always labelled as SF Service Guide so there is no
     // ambiguity about which of the two links is which.
@@ -419,7 +457,9 @@
     pill.textContent = "review " + item.position + " of " + item.total;
     prompt.textContent = item.kind === "abstention"
       ? "Can you check this listing?"
-      : "Should this listing be changed?";
+      : item.kind === "structural"
+        ? "Is this number broken?"
+        : "Should this listing be changed?";
     document.body.classList.remove("disconnected");
   }
 

@@ -1,0 +1,1312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Freshness — SF Service Guide Watch</title>
+<style>
+  :root{
+    --bg:#0b0d10;
+    --panel:#14181d;
+    --panel2:#1b2027;
+    --border:#2a3038;
+    --text:#e8ecf1;
+    --muted:#9aa5b1;
+    --red:#ff6b6b;
+    --red-dim:#3a1f22;
+    --orange:#e8813f;
+    --orange-dim:#332113;
+    --green:#5fd68a;
+    --green-dim:#1c2e22;
+    --amber:#f0b94d;
+    --amber-dim:#2a2620;
+    --accent:#6fa8ff;
+    --accent-dim:#16202f;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:16px;
+    line-height:1.5;
+    padding:0 0 60px 0;
+  }
+  a{color:var(--accent);}
+
+  /* Shared nav */
+  nav.app-nav{
+    display:flex;
+    gap:4px;
+    align-items:center;
+    padding:10px 24px;
+    border-bottom:1px solid var(--border);
+    background:#0e1116;
+    position:sticky;
+    top:0;
+    z-index:20;
+    flex-wrap:wrap;
+  }
+  nav.app-nav .brand{
+    font-weight:700;
+    font-size:14px;
+    letter-spacing:-0.01em;
+    margin-right:14px;
+    white-space:nowrap;
+  }
+  nav.app-nav a{
+    color:var(--muted);
+    text-decoration:none;
+    font-size:14px;
+    padding:6px 12px;
+    border-radius:8px;
+    border:1px solid transparent;
+  }
+  nav.app-nav a:hover{color:var(--text);background:var(--panel);}
+  nav.app-nav a[aria-current="page"]{
+    color:var(--text);
+    background:var(--panel2);
+    border-color:var(--border);
+    font-weight:600;
+  }
+
+  header.top{
+    padding:36px 24px 28px;
+    border-bottom:1px solid var(--border);
+    background:linear-gradient(180deg,#12151a,#0b0d10);
+  }
+  header.top h1{
+    margin:0 0 6px 0;
+    font-size:clamp(28px,5vw,42px);
+    letter-spacing:-0.02em;
+  }
+  header.top p.tagline{
+    margin:0;
+    color:var(--muted);
+    font-size:clamp(15px,2vw,18px);
+  }
+  .framing{
+    margin-top:14px;
+    max-width:78ch;
+    font-size:15px;
+    color:var(--text);
+  }
+  .framing strong{color:#fff;}
+  .framing .who{
+    display:block;
+    margin-top:6px;
+    color:var(--muted);
+  }
+  .source-note{
+    margin-top:10px;
+    font-size:13px;
+    color:var(--muted);
+  }
+
+  main{
+    max-width:1100px;
+    margin:0 auto;
+    padding:0 24px;
+  }
+  section{margin-top:44px;}
+  h2{
+    font-size:clamp(20px,3vw,26px);
+    margin:0 0 14px 0;
+    letter-spacing:-0.01em;
+  }
+  h2 .sub{
+    display:block;
+    font-size:14px;
+    font-weight:400;
+    color:var(--muted);
+    margin-top:4px;
+    max-width:78ch;
+  }
+  p.note{
+    color:var(--muted);
+    font-size:14px;
+    max-width:78ch;
+  }
+
+  .demo-banner{
+    background:#2a2416;
+    border:1px solid #4a3f22;
+    color:var(--amber);
+    padding:10px 16px;
+    border-radius:8px;
+    font-size:13px;
+    margin-bottom:20px;
+  }
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:20px 18px;
+  }
+
+  /* ---------- 1. Headline ---------- */
+  .headline-grid{
+    display:grid;
+    grid-template-columns:minmax(0,260px) minmax(0,1fr);
+    gap:16px;
+    align-items:stretch;
+  }
+  @media (max-width:760px){
+    .headline-grid{grid-template-columns:1fr;}
+  }
+  .score-tile{
+    background:linear-gradient(180deg,#121a26,#14181d);
+    border:1px solid #2c3f5c;
+    border-radius:12px;
+    padding:22px 20px;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+  }
+  .score-number{
+    font-size:clamp(56px,11vw,84px);
+    font-weight:700;
+    line-height:.95;
+    letter-spacing:-0.03em;
+    color:var(--accent);
+  }
+  .score-number .of{
+    font-size:.35em;
+    font-weight:600;
+    color:var(--muted);
+    letter-spacing:0;
+    margin-left:6px;
+  }
+  .score-label{
+    margin-top:10px;
+    font-size:15px;
+    font-weight:600;
+  }
+  .score-sub{
+    margin-top:4px;
+    color:var(--muted);
+    font-size:13px;
+  }
+
+  .bands-wrap{display:flex;flex-direction:column;justify-content:center;}
+  .stacked{
+    display:flex;
+    width:100%;
+    height:46px;
+    border-radius:8px;
+    overflow:hidden;
+    border:1px solid var(--border);
+    background:#242a32;
+  }
+  .stacked > div{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:13px;
+    font-weight:700;
+    color:#0b0d10;
+    min-width:0;
+    overflow:hidden;
+    white-space:nowrap;
+  }
+  .band-legend{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px 18px;
+    margin-top:14px;
+    font-size:13px;
+  }
+  .band-legend .item{display:flex;align-items:center;gap:8px;color:var(--muted);}
+  .band-legend .swatch{width:12px;height:12px;border-radius:3px;flex:none;}
+  .band-legend b{color:var(--text);}
+  .band-legend .rng{color:#6b7684;}
+
+  .ministat-row{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    gap:14px;
+    margin-top:16px;
+  }
+  .ministat{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:16px 16px;
+  }
+  .ministat .n{font-size:26px;font-weight:700;line-height:1;letter-spacing:-0.02em;}
+  .ministat .l{margin-top:6px;color:var(--muted);font-size:13px;}
+
+  .movenote{
+    margin-top:16px;
+    border-left:3px solid var(--accent);
+    background:var(--accent-dim);
+    padding:12px 16px;
+    border-radius:0 8px 8px 0;
+    font-size:15px;
+    max-width:78ch;
+  }
+
+  /* ---------- 2. Decay curve ---------- */
+  .curve-wrap{overflow-x:auto;}
+  svg.curve{display:block;width:100%;min-width:520px;height:auto;}
+  svg.curve text{font-family:inherit;fill:var(--muted);}
+  .curve-legend{
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px 20px;
+    margin-top:14px;
+    font-size:13px;
+  }
+  .curve-legend .item{display:flex;align-items:center;gap:8px;color:var(--muted);}
+  .curve-legend .line{width:22px;height:3px;border-radius:2px;flex:none;}
+  .curve-legend b{color:var(--text);text-transform:capitalize;}
+
+  /* ---------- 3. Evidence ladder ---------- */
+  .ladder{display:flex;flex-direction:column;gap:10px;}
+  .rung{
+    display:grid;
+    grid-template-columns:190px 1fr;
+    gap:14px;
+    align-items:center;
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:14px 16px;
+  }
+  @media (max-width:700px){
+    .rung{grid-template-columns:1fr;gap:8px;}
+  }
+  .rung .head{display:flex;align-items:baseline;gap:10px;}
+  .rung .val{font-size:28px;font-weight:700;line-height:1;letter-spacing:-0.02em;}
+  .rung .name{font-size:13px;font-weight:600;color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
+  .rung .meter{
+    height:10px;
+    border-radius:5px;
+    background:#242a32;
+    overflow:hidden;
+    margin-top:8px;
+  }
+  .rung .meter i{display:block;height:100%;border-radius:5px;}
+  .rung p{margin:0;font-size:14px;color:var(--muted);}
+  .rung p b{color:var(--text);font-weight:600;}
+  .rung.ceiling{
+    border-color:#6a4a24;
+    background:linear-gradient(180deg,#1d1811,#14181d);
+  }
+  .ceiling-flag{
+    display:inline-block;
+    margin-top:8px;
+    font-size:12px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+    color:var(--amber);
+    background:var(--amber-dim);
+    border:1px solid #4a3f22;
+    border-radius:6px;
+    padding:3px 8px;
+  }
+  .ceiling-callout{
+    margin-top:14px;
+    border-left:3px solid var(--amber);
+    background:var(--amber-dim);
+    padding:12px 16px;
+    border-radius:0 8px 8px 0;
+    font-size:15px;
+    max-width:78ch;
+  }
+  .ceiling-callout b{color:#fff;}
+
+  /* ---------- 4. Worst listings ---------- */
+  .worst-list{display:flex;flex-direction:column;gap:12px;}
+  .worst-card{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:16px 18px;
+  }
+  .worst-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:12px;
+    flex-wrap:wrap;
+  }
+  .worst-title{font-size:18px;font-weight:600;margin:0;}
+  .worst-title .rank{color:#6b7684;font-weight:600;margin-right:8px;font-variant-numeric:tabular-nums;}
+  .worst-meta{color:var(--muted);font-size:12.5px;margin-top:2px;}
+  .worst-right{display:flex;align-items:center;gap:10px;white-space:nowrap;}
+  .worst-score{font-size:26px;font-weight:700;line-height:1;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;}
+  .band-chip{
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+    padding:4px 10px;
+    border-radius:6px;
+    font-weight:700;
+  }
+  .fieldbars{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(170px,1fr));
+    gap:8px 16px;
+    margin-top:14px;
+  }
+  .fieldbar .fb-top{
+    display:flex;
+    justify-content:space-between;
+    gap:8px;
+    font-size:12px;
+    color:var(--muted);
+  }
+  .fieldbar .fb-top .fname{text-transform:capitalize;color:var(--text);font-weight:600;}
+  .fieldbar .track{height:6px;border-radius:3px;background:#242a32;overflow:hidden;margin-top:4px;}
+  .fieldbar .track i{display:block;height:100%;border-radius:3px;}
+  .fieldbar .fb-ev{font-size:11px;color:#6b7684;margin-top:3px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
+  .next-action{
+    margin-top:14px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:14px;
+    flex-wrap:wrap;
+    background:var(--green-dim);
+    border:1px solid #2c4a35;
+    border-radius:10px;
+    padding:12px 14px;
+  }
+  .next-action .na-label{
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:.06em;
+    font-weight:700;
+    color:var(--green);
+  }
+  .next-action .na-text{font-size:15px;margin-top:2px;}
+  .next-action .na-text b{text-transform:capitalize;}
+  .next-action .na-gain{
+    font-size:20px;
+    font-weight:700;
+    color:var(--green);
+    white-space:nowrap;
+    font-variant-numeric:tabular-nums;
+  }
+  .next-action .na-gain span{display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;}
+
+  /* ---------- 5. What would it take ---------- */
+  .cost-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+    gap:14px;
+    margin-top:16px;
+  }
+  .cost-tile{
+    background:var(--panel2);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:16px;
+  }
+  .cost-tile .n{font-size:30px;font-weight:700;line-height:1;letter-spacing:-0.02em;color:var(--accent);}
+  .cost-tile .l{margin-top:6px;font-size:13px;color:var(--muted);}
+  .rate-row{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    flex-wrap:wrap;
+    margin-top:18px;
+  }
+  .rate-row label{font-size:14px;color:var(--muted);}
+  .rate-row input[type=range]{width:min(320px,100%);accent-color:var(--accent);}
+  .rate-row output{font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;}
+  ol.working{
+    margin:16px 0 0 0;
+    padding-left:22px;
+    font-size:14.5px;
+    color:var(--muted);
+    max-width:80ch;
+  }
+  ol.working li{margin-bottom:6px;}
+  ol.working b{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums;}
+  .caveat{
+    margin-top:16px;
+    border-left:3px solid var(--orange);
+    background:var(--orange-dim);
+    padding:12px 16px;
+    border-radius:0 8px 8px 0;
+    font-size:14.5px;
+    max-width:78ch;
+  }
+  .caveat b{color:#fff;}
+
+  .empty-note{
+    color:var(--muted);
+    font-style:italic;
+    padding:20px;
+    text-align:center;
+    border:1px dashed var(--border);
+    border-radius:10px;
+  }
+  footer.page-foot{
+    max-width:1100px;
+    margin:48px auto 0;
+    padding:20px 24px 0;
+    border-top:1px solid var(--border);
+    color:#6b7684;
+    font-size:13px;
+  }
+</style>
+</head>
+<body>
+
+<nav class="app-nav">
+  <span class="brand">SF Service Guide Watch</span>
+  <a href="/">Dashboard</a>
+  <a href="/review">Review</a>
+  <a href="/graph">Graph</a>
+  <a href="/freshness" aria-current="page">Freshness</a>
+</nav>
+
+<header class="top">
+  <h1>Freshness</h1>
+  <p class="tagline">Not &ldquo;what is broken?&rdquo; &mdash; &ldquo;what has expired?&rdquo;</p>
+  <p class="framing">
+    <strong>Broken</strong> is provably wrong right now: a phone row with no number, hours that close before they open. The rest of this app hunts those.
+    <span class="who"><strong>Stale</strong> is different. The listing may well be fine &mdash; nobody has confirmed it in years. That is not an error, it is a shelf life. Every field carries an implicit promise that decays: a phone number stays true for years, opening hours for months. This page scores that decay.</span>
+  </p>
+  <p class="source-note">Model and constants: <code>freshness.py</code>. Source directory: sfserviceguide.org (nonprofit ShelterTech).</p>
+</header>
+
+<main>
+  <div id="demo-banner-slot"></div>
+
+  <!-- 1. Headline -->
+  <section id="headline-section">
+    <h2>The number that should move
+      <span class="sub">Median freshness across every approved listing. One number, tracked over time &mdash; if the work is working, this goes up.</span>
+    </h2>
+    <div id="headline-slot"></div>
+  </section>
+
+  <!-- 2. Decay curve -->
+  <section id="decay-section">
+    <h2>Why hours expire faster than phone numbers
+      <span class="sub">Confidence in a confirmed value halves after one half-life, and keeps halving. Opening hours change with seasons, funding and staffing; an organisation keeps its number for years.</span>
+    </h2>
+    <div class="panel">
+      <div class="curve-wrap" id="curve-slot"></div>
+      <div class="curve-legend" id="curve-legend"></div>
+    </div>
+    <p class="note" id="decay-note"></p>
+  </section>
+
+  <!-- 3. Evidence ladder -->
+  <section id="ladder-section">
+    <h2>The evidence ladder
+      <span class="sub">What kind of evidence last supported a value sets its ceiling. Age then decays it from there.</span>
+    </h2>
+    <div class="ladder" id="ladder-slot"></div>
+    <div class="ceiling-callout">
+      <b>A structural check proves a value is well-formed, never that it is current.</b>
+      &ldquo;(415) 555-0123&rdquo; is a perfectly well-formed number for an organisation that closed in 2019. That is why <code>structural_ok</code> is capped at 40 and can never climb higher no matter how recently the record was touched. Only a human who checked, or agreement with the organisation&rsquo;s own source, resets the clock.
+    </div>
+  </section>
+
+  <!-- 4. Worst listings -->
+  <section id="worst-section">
+    <h2>The work plan
+      <span class="sub">The lowest-scoring listings, each with the single cheapest action that would raise it most. 800 stale listings is useless; 800 stale listings with one named next action each is a plan.</span>
+    </h2>
+    <div class="worst-list" id="worst-slot"></div>
+  </section>
+
+  <!-- 5. What would it take -->
+  <section id="cost-section">
+    <h2>What would it take?
+      <span class="sub">Arithmetic on our own model &mdash; not a promise, and not a measurement.</span>
+    </h2>
+    <div class="panel" id="cost-slot"></div>
+  </section>
+</main>
+
+<footer class="page-foot">
+  <span id="generated-note">Freshness model: <code>freshness.py</code>.</span>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ------------------------------------------------------------------ *
+   * Bundled demo data. Real values from the 2026-09-20 run, kept here so
+   * the page renders on a projector with no server and no data file.
+   * ------------------------------------------------------------------ */
+  var DEMO_DATA_HALF_LIVES = { phone:1095, address:1095, website:730, email:730, schedule:180, services:365, status:365 };
+
+  var DEMO_DATA = {
+    generated_at: "2026-09-20T01:07:43.596936+00:00",
+    listings: 813,
+    median_freshness: 36.2,
+    mean_freshness: 30.0,
+    bands: { fresh: 8, aging: 0, stale: 600, expired: 205 },
+    band_pct: { fresh: 1.0, aging: 0.0, stale: 73.8, expired: 25.2 },
+    half_lives: { phone:1095, address:1095, website:730, email:730, schedule:180, services:365, status:365 },
+    weights: { phone:0.25, address:0.20, schedule:0.25, status:0.15, website:0.08, services:0.05, email:0.02 },
+    worst: [
+      demoListing(171, "St. Vincent de Paul Society", 6.1, 3292),
+      demoListing(190, "The Family School", 6.3, 3241),
+      demoListing(224, "Tenderloin Housing Clinic", 6.4, 3218),
+      demoListing(96,  "Glide Memorial Church", 6.6, 3180),
+      demoListing(311, "Bayview Hunters Point Foundation", 6.9, 3120),
+      demoListing(402, "Mission Neighborhood Health Center", 7.2, 3065),
+      demoListing(58,  "Larkin Street Youth Services", 7.5, 3010),
+      demoListing(147, "Episcopal Community Services", 7.8, 2960),
+      demoListing(263, "Homeless Prenatal Program", 8.1, 2905),
+      demoListing(519, "Swords to Plowshares", 8.4, 2850)
+    ]
+  };
+
+  // Build a demo listing whose per-field numbers obey the real model, so the
+  // demo view teaches the same thing the live view does.
+  function demoListing(id, name, freshness, age){
+    var hl = DEMO_DATA_HALF_LIVES;
+    var fields = {};
+    for(var f in hl){
+      if(!Object.prototype.hasOwnProperty.call(hl, f)) continue;
+      fields[f] = {
+        score: Math.round(100 * Math.pow(0.5, age / hl[f]) * 10) / 10,
+        evidence: "human_verified",
+        age_days: age,
+        half_life: hl[f]
+      };
+    }
+    return {
+      resource_id: id,
+      name: name,
+      freshness: freshness,
+      band: freshness >= 70 ? "fresh" : freshness >= 40 ? "aging" : freshness >= 15 ? "stale" : "expired",
+      coverage: 1.0,
+      fields: fields,
+      next_action: {
+        field: "schedule",
+        action: "confirm schedule against the organisation's own source",
+        score_gain: Math.round((90 - fields.schedule.score) * 0.25 * 10) / 10
+      }
+    };
+  }
+
+  /* ---------- Model constants (mirrors freshness.py) ---------- */
+  var EVIDENCE_CEILING = {
+    human_verified: 100,
+    source_agreement: 90,
+    structural_ok: 40,
+    none: 0
+  };
+  var EVIDENCE_COPY = [
+    { key:"human_verified", label:"Human verified",
+      text:"Someone checked this against reality &mdash; called the number, stood at the door. The only evidence worth 100." },
+    { key:"source_agreement", label:"Source agreement",
+      text:"The organisation&rsquo;s own website says the same thing. Strong, and cheap to collect at scale &mdash; but a site can be stale too, so it stops short of 100." },
+    { key:"structural_ok", label:"Structurally OK",
+      text:"The value is present and well-formed. It proves nothing about whether it is still true today." },
+    { key:"none", label:"No evidence",
+      text:"The field is empty. You cannot be stale about something you never claimed &mdash; absent fields are excluded from the score and show up as coverage instead." }
+  ];
+  var BAND_ORDER = ["fresh","aging","stale","expired"];
+  var BAND_META = {
+    fresh:   { color:"#5fd68a", dim:"#1c2e22", label:"Fresh",   range:"70–100" },
+    aging:   { color:"#f0b94d", dim:"#2a2620", label:"Aging",   range:"40–69"  },
+    stale:   { color:"#e8813f", dim:"#332113", label:"Stale",   range:"15–39"  },
+    expired: { color:"#ff6b6b", dim:"#3a1f22", label:"Expired", range:"0–14"   }
+  };
+  // One hue per half-life group, ordered slowest-decaying to fastest.
+  var CURVE_COLORS = ["#6fa8ff","#5fd68a","#f0b94d","#ff6b6b","#c08cf0","#4ecdc4","#e8813f"];
+
+  /* ---------- Small defensive helpers ---------- */
+  function el(tag, cls, text){
+    var n = document.createElement(tag);
+    if(cls) n.className = cls;
+    if(text !== undefined && text !== null) n.textContent = String(text);
+    return n;
+  }
+  function num(v, fallback){
+    var x = typeof v === "number" ? v : parseFloat(v);
+    return (typeof x === "number" && isFinite(x)) ? x : fallback;
+  }
+  function str(v, fallback){
+    if(v === undefined || v === null) return fallback;
+    var s = String(v);
+    return s.length ? s : fallback;
+  }
+  function obj(v){
+    return (v && typeof v === "object" && !Array.isArray(v)) ? v : {};
+  }
+  function arr(v){ return Array.isArray(v) ? v : []; }
+  function fmt1(v){
+    var x = num(v, null);
+    return x === null ? "–" : (Math.round(x * 10) / 10).toFixed(1);
+  }
+  function fmtInt(v){
+    var x = num(v, null);
+    if(x === null) return "–";
+    return Math.round(x).toLocaleString("en-US");
+  }
+  function bandFor(score){
+    var s = num(score, 0);
+    if(s >= 70) return "fresh";
+    if(s >= 40) return "aging";
+    if(s >= 15) return "stale";
+    return "expired";
+  }
+  function bandMeta(b){
+    return BAND_META[b] || BAND_META.expired;
+  }
+  function years(days){
+    var d = num(days, null);
+    if(d === null) return null;
+    return Math.round((d / 365.25) * 10) / 10;
+  }
+  function humanHalfLife(days){
+    var d = num(days, null);
+    if(d === null) return "–";
+    if(d < 365) return Math.round(d / 30) + " months";
+    var y = d / 365.25;
+    return (Math.round(y * 10) / 10) + (y >= 1.95 ? " years" : " year");
+  }
+  function svgEl(tag, attrs){
+    var n = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    for(var k in attrs){
+      if(Object.prototype.hasOwnProperty.call(attrs, k)) n.setAttribute(k, String(attrs[k]));
+    }
+    return n;
+  }
+  function clear(node){ while(node && node.firstChild) node.removeChild(node.firstChild); }
+
+  /* ------------------------------------------------------------------ *
+   * 1. Headline
+   * ------------------------------------------------------------------ */
+  function renderHeadline(data){
+    var slot = document.getElementById("headline-slot");
+    if(!slot) return;
+    clear(slot);
+
+    var median = num(data.median_freshness, null);
+    var mean = num(data.mean_freshness, null);
+    var listings = num(data.listings, null);
+    var bands = obj(data.bands);
+    var pcts = obj(data.band_pct);
+
+    var counts = {}, total = 0;
+    BAND_ORDER.forEach(function(b){
+      counts[b] = Math.max(0, num(bands[b], 0));
+      total += counts[b];
+    });
+    if(!total && listings) total = listings;
+
+    var grid = el("div", "headline-grid");
+
+    // Big score
+    var tile = el("div", "score-tile");
+    var scoreN = el("div", "score-number");
+    scoreN.appendChild(document.createTextNode(median === null ? "–" : fmt1(median)));
+    var of = el("span", "of", "/ 100");
+    scoreN.appendChild(of);
+    if(median !== null) scoreN.style.color = bandMeta(bandFor(median)).color;
+    tile.appendChild(scoreN);
+    tile.appendChild(el("div", "score-label", "Median freshness"));
+    tile.appendChild(el("div", "score-sub",
+      "Band: " + bandMeta(bandFor(median === null ? 0 : median)).label +
+      (mean === null ? "" : "  ·  mean " + fmt1(mean))));
+    grid.appendChild(tile);
+
+    // Stacked band bar
+    var wrap = el("div", "bands-wrap");
+    var bar = el("div", "stacked");
+    if(total > 0){
+      BAND_ORDER.forEach(function(b){
+        var c = counts[b];
+        if(c <= 0) return;
+        var pct = 100 * c / total;
+        var seg = el("div");
+        seg.style.width = pct.toFixed(3) + "%";
+        seg.style.background = bandMeta(b).color;
+        seg.title = bandMeta(b).label + ": " + fmtInt(c) + " listings (" + fmt1(pct) + "%)";
+        if(pct > 7) seg.textContent = fmtInt(c);
+        bar.appendChild(seg);
+      });
+    }
+    wrap.appendChild(bar);
+
+    var legend = el("div", "band-legend");
+    BAND_ORDER.forEach(function(b){
+      var m = bandMeta(b);
+      var item = el("div", "item");
+      var sw = el("span", "swatch");
+      sw.style.background = m.color;
+      item.appendChild(sw);
+      var c = counts[b];
+      var pct = num(pcts[b], total ? (100 * c / total) : 0);
+      item.appendChild(el("b", null, m.label));
+      item.appendChild(document.createTextNode(" " + fmtInt(c) + " (" + fmt1(pct) + "%)"));
+      var rng = el("span", "rng", " · " + m.range);
+      item.appendChild(rng);
+      legend.appendChild(item);
+    });
+    wrap.appendChild(legend);
+    grid.appendChild(wrap);
+    slot.appendChild(grid);
+
+    // Mini stats
+    var mini = el("div", "ministat-row");
+    function addMini(n, label, color){
+      var t = el("div", "ministat");
+      var nn = el("div", "n", n);
+      if(color) nn.style.color = color;
+      t.appendChild(nn);
+      t.appendChild(el("div", "l", label));
+      mini.appendChild(t);
+    }
+    addMini(fmtInt(listings), "approved listings scored");
+    addMini(fmtInt(counts.stale + counts.expired),
+      "stale or expired — not known to be wrong, just unconfirmed", "#e8813f");
+    addMini(fmtInt(counts.fresh), "fresh: confirmed recently enough to trust", "#5fd68a");
+    addMini(fmt1(mean), "mean freshness (pulled down by the long tail)");
+    slot.appendChild(mini);
+
+    var note = el("div", "movenote");
+    note.innerHTML = "This is the metric to watch, not the count of findings. " +
+      "Findings go down when the directory is clean <em>and</em> when the agent stops looking. " +
+      "Median freshness only goes up if someone actually re-confirmed something.";
+    slot.appendChild(note);
+  }
+
+  /* ------------------------------------------------------------------ *
+   * 2. Decay curve
+   * ------------------------------------------------------------------ */
+  function renderDecay(data){
+    var slot = document.getElementById("curve-slot");
+    var legendSlot = document.getElementById("curve-legend");
+    var noteSlot = document.getElementById("decay-note");
+    if(!slot) return;
+    clear(slot);
+    if(legendSlot) clear(legendSlot);
+
+    var hl = obj(data.half_lives);
+    // Group fields that share a half-life; they draw the same curve.
+    var groups = [];
+    Object.keys(hl).forEach(function(field){
+      var d = num(hl[field], null);
+      if(d === null || d <= 0) return;
+      var g = null;
+      for(var i = 0; i < groups.length; i++){ if(groups[i].days === d) g = groups[i]; }
+      if(!g){ g = { days: d, fields: [] }; groups.push(g); }
+      g.fields.push(field);
+    });
+    groups.sort(function(a, b){ return b.days - a.days; });
+
+    if(!groups.length){
+      slot.appendChild(el("div", "empty-note", "No half-lives in this report."));
+      return;
+    }
+
+    var W = 900, H = 400;
+    var pad = { l: 56, r: 22, t: 18, b: 52 };
+    var plotW = W - pad.l - pad.r, plotH = H - pad.t - pad.b;
+    var maxDays = 1825; // 5 years
+    var x = function(d){ return pad.l + (Math.max(0, Math.min(maxDays, d)) / maxDays) * plotW; };
+    var y = function(pct){ return pad.t + (1 - Math.max(0, Math.min(100, pct)) / 100) * plotH; };
+
+    var svg = svgEl("svg", {
+      "class": "curve", viewBox: "0 0 " + W + " " + H,
+      role: "img",
+      "aria-label": "Confidence decay curves by field half-life over five years"
+    });
+
+    // Grid + y axis (confidence %)
+    [0, 25, 50, 75, 100].forEach(function(p){
+      svg.appendChild(svgEl("line", {
+        x1: pad.l, x2: W - pad.r, y1: y(p), y2: y(p),
+        stroke: p === 50 ? "#3c4450" : "#232a33",
+        "stroke-width": 1,
+        "stroke-dasharray": p === 50 ? "5 5" : ""
+      }));
+      var t = svgEl("text", { x: pad.l - 10, y: y(p) + 4, "text-anchor": "end", "font-size": 12 });
+      t.textContent = p + "%";
+      svg.appendChild(t);
+    });
+    var half = svgEl("text", { x: W - pad.r, y: y(50) - 8, "text-anchor": "end", "font-size": 12, fill: "#9aa5b1" });
+    half.textContent = "half the confidence gone";
+    svg.appendChild(half);
+
+    // x axis ticks, one per year
+    for(var yr = 0; yr <= 5; yr++){
+      var dx = yr * 365;
+      svg.appendChild(svgEl("line", {
+        x1: x(dx), x2: x(dx), y1: pad.t, y2: pad.t + plotH,
+        stroke: "#1e242c", "stroke-width": 1
+      }));
+      var xt = svgEl("text", { x: x(dx), y: pad.t + plotH + 22, "text-anchor": "middle", "font-size": 12 });
+      xt.textContent = yr === 0 ? "confirmed" : yr + "y";
+      svg.appendChild(xt);
+    }
+    var xlab = svgEl("text", {
+      x: pad.l + plotW / 2, y: H - 12, "text-anchor": "middle", "font-size": 12.5, fill: "#6b7684"
+    });
+    xlab.textContent = "time since the value was last confirmed";
+    svg.appendChild(xlab);
+
+    // Curves
+    groups.forEach(function(g, i){
+      var color = CURVE_COLORS[i % CURVE_COLORS.length];
+      g.color = color;
+      var pts = [];
+      for(var s = 0; s <= 120; s++){
+        var d = (s / 120) * maxDays;
+        pts.push((s === 0 ? "M" : "L") + x(d).toFixed(2) + " " + y(100 * Math.pow(0.5, d / g.days)).toFixed(2));
+      }
+      svg.appendChild(svgEl("path", {
+        d: pts.join(" "), fill: "none", stroke: color, "stroke-width": 2.5,
+        "stroke-linejoin": "round", "stroke-linecap": "round"
+      }));
+
+      // Mark the half-life: the point where the curve crosses 50%.
+      if(g.days <= maxDays){
+        svg.appendChild(svgEl("line", {
+          x1: x(g.days), x2: x(g.days), y1: y(50), y2: pad.t + plotH,
+          stroke: color, "stroke-width": 1, "stroke-dasharray": "3 4", opacity: .55
+        }));
+        svg.appendChild(svgEl("circle", {
+          cx: x(g.days), cy: y(50), r: 4.5, fill: color, stroke: "#0b0d10", "stroke-width": 1.5
+        }));
+        var lbl = svgEl("text", {
+          x: x(g.days) + (g.days > maxDays * 0.75 ? -8 : 8),
+          y: y(50) - 10,
+          "text-anchor": g.days > maxDays * 0.75 ? "end" : "start",
+          "font-size": 12.5, "font-weight": 600, fill: color
+        });
+        lbl.textContent = g.fields.join(" · ") + "  " + humanHalfLife(g.days);
+        svg.appendChild(lbl);
+      }
+    });
+
+    slot.appendChild(svg);
+
+    if(legendSlot){
+      groups.forEach(function(g){
+        var item = el("div", "item");
+        var ln = el("span", "line");
+        ln.style.background = g.color;
+        item.appendChild(ln);
+        item.appendChild(el("b", null, g.fields.join(", ")));
+        item.appendChild(document.createTextNode(
+          " half-life " + fmtInt(g.days) + "d — " + humanHalfLife(g.days)));
+        legendSlot.appendChild(item);
+      });
+    }
+
+    if(noteSlot){
+      var fastest = groups[groups.length - 1], slowest = groups[0];
+      noteSlot.textContent =
+        "Read it this way. Confirm a " + fastest.fields[0] + " and a " + slowest.fields[0] +
+        " on the same afternoon, then come back " + humanHalfLife(fastest.days) + " later: the " +
+        fastest.fields[0] + " is worth half what it was, while the " + slowest.fields[0] +
+        " is still worth " + fmt1(100 * Math.pow(0.5, fastest.days / slowest.days)) +
+        "% of its original confidence. Same evidence, same day, different shelf life — which is why a " +
+        "re-check queue sorted by age alone checks the wrong things first.";
+    }
+  }
+
+  /* ------------------------------------------------------------------ *
+   * 3. Evidence ladder
+   * ------------------------------------------------------------------ */
+  function renderLadder(){
+    var slot = document.getElementById("ladder-slot");
+    if(!slot) return;
+    clear(slot);
+
+    EVIDENCE_COPY.forEach(function(rung){
+      var ceiling = num(EVIDENCE_CEILING[rung.key], 0);
+      var isCap = rung.key === "structural_ok";
+      var row = el("div", "rung" + (isCap ? " ceiling" : ""));
+
+      var left = el("div");
+      var head = el("div", "head");
+      var val = el("div", "val", String(ceiling));
+      val.style.color = ceiling >= 90 ? "#5fd68a" : ceiling >= 40 ? "#f0b94d" : "#6b7684";
+      head.appendChild(val);
+      head.appendChild(el("span", "name", rung.key));
+      left.appendChild(head);
+      var meter = el("div", "meter");
+      var fill = el("i");
+      fill.style.width = ceiling + "%";
+      fill.style.background = val.style.color;
+      meter.appendChild(fill);
+      left.appendChild(meter);
+      if(isCap) left.appendChild(el("span", "ceiling-flag", "hard ceiling · 40"));
+      row.appendChild(left);
+
+      var right = el("div");
+      var title = el("div");
+      title.style.fontWeight = "600";
+      title.style.marginBottom = "4px";
+      title.textContent = rung.label;
+      right.appendChild(title);
+      var p = el("p");
+      p.innerHTML = rung.text;
+      right.appendChild(p);
+      row.appendChild(right);
+
+      slot.appendChild(row);
+    });
+  }
+
+  /* ------------------------------------------------------------------ *
+   * 4. Worst listings
+   * ------------------------------------------------------------------ */
+  function renderWorst(data){
+    var slot = document.getElementById("worst-slot");
+    if(!slot) return;
+    clear(slot);
+
+    var worst = arr(data.worst);
+    if(!worst.length){
+      slot.appendChild(el("div", "empty-note", "No listing breakdown in this report."));
+      return;
+    }
+
+    var weights = obj(data.weights);
+
+    worst.forEach(function(item, idx){
+      item = obj(item);
+      var card = el("div", "worst-card");
+      var score = num(item.freshness, null);
+      // Trust the report's band only if we recognise it; otherwise derive it.
+      var b = str(item.band, null);
+      if(!b || !BAND_META[b]) b = bandFor(score === null ? 0 : score);
+      var meta = bandMeta(b);
+
+      var head = el("div", "worst-head");
+      var lhs = el("div");
+      var h = el("h3", "worst-title");
+      h.appendChild(el("span", "rank", "#" + (idx + 1)));
+      h.appendChild(document.createTextNode(str(item.name, "Unnamed listing")));
+      lhs.appendChild(h);
+      var metaBits = [];
+      if(item.resource_id !== undefined && item.resource_id !== null){
+        metaBits.push("resource " + str(item.resource_id, "?"));
+      }
+      var cov = num(item.coverage, null);
+      if(cov !== null) metaBits.push("coverage " + Math.round(cov * 100) + "% of weighted fields present");
+      lhs.appendChild(el("div", "worst-meta", metaBits.join("  ·  ")));
+      head.appendChild(lhs);
+
+      var rhs = el("div", "worst-right");
+      var chip = el("span", "band-chip", meta.label);
+      chip.style.background = meta.dim;
+      chip.style.color = meta.color;
+      var sc = el("span", "worst-score", fmt1(score));
+      sc.style.color = meta.color;
+      rhs.appendChild(sc);
+      rhs.appendChild(chip);
+      head.appendChild(rhs);
+      card.appendChild(head);
+
+      // Per-field mini-breakdown, worst field first.
+      var fields = obj(item.fields);
+      var rows = Object.keys(fields).map(function(name){
+        var f = obj(fields[name]);
+        return {
+          name: name,
+          score: num(f.score, 0),
+          evidence: str(f.evidence, "none"),
+          age: num(f.age_days, null),
+          half: num(f.half_life, null),
+          weight: num(weights[name], null)
+        };
+      });
+      if(rows.length){
+        rows.sort(function(a, c){
+          var aw = (a.weight === null ? 0.1 : a.weight), cw = (c.weight === null ? 0.1 : c.weight);
+          // Drag = how many weighted points this field is costing.
+          return ((100 - c.score) * cw) - ((100 - a.score) * aw);
+        });
+        var fb = el("div", "fieldbars");
+        rows.forEach(function(r){
+          var box = el("div", "fieldbar");
+          var top = el("div", "fb-top");
+          top.appendChild(el("span", "fname", r.name));
+          top.appendChild(el("span", null, fmt1(r.score)));
+          box.appendChild(top);
+          var track = el("div", "track");
+          var i = el("i");
+          i.style.width = Math.max(1.5, Math.min(100, r.score)) + "%";
+          i.style.background = bandMeta(bandFor(r.score)).color;
+          track.appendChild(i);
+          box.appendChild(track);
+          var bits = [r.evidence];
+          var yr = years(r.age);
+          if(yr !== null) bits.push(yr + "y ago");
+          if(r.half !== null) bits.push("hl " + r.half + "d");
+          box.appendChild(el("div", "fb-ev", bits.join(" · ")));
+          fb.appendChild(box);
+        });
+        card.appendChild(fb);
+      }
+
+      var na = obj(item.next_action);
+      if(item.next_action && (na.field || na.action)){
+        var box2 = el("div", "next-action");
+        var txtWrap = el("div");
+        txtWrap.appendChild(el("div", "na-label", "Next action"));
+        var t = el("div", "na-text");
+        t.textContent = str(na.action, "confirm " + str(na.field, "this field") +
+          " against the organisation's own source");
+        txtWrap.appendChild(t);
+        box2.appendChild(txtWrap);
+        var gain = num(na.score_gain, null);
+        if(gain !== null){
+          var g = el("div", "na-gain", "+" + fmt1(gain));
+          g.appendChild(el("span", null, "points"));
+          box2.appendChild(g);
+        }
+        card.appendChild(box2);
+      } else {
+        var none = el("div", "worst-meta");
+        none.style.marginTop = "12px";
+        none.textContent = "No next action — every weighted field on this listing is empty. " +
+          "Nothing to re-confirm; this one needs data before it needs checking.";
+        card.appendChild(none);
+      }
+
+      slot.appendChild(card);
+    });
+
+    var tail = el("p", "note");
+    var listings = num(data.listings, null);
+    tail.textContent = "Showing the " + worst.length + " lowest-scoring listings" +
+      (listings ? " of " + fmtInt(listings) : "") +
+      ". The full report carries a next action for every listing that has one.";
+    slot.appendChild(tail);
+  }
+
+  /* ------------------------------------------------------------------ *
+   * 5. What would it take?
+   * ------------------------------------------------------------------ */
+  var costState = { data: null, rate: 4 };
+
+  function costModel(data, rate){
+    var TARGET = 70;
+    var median = num(data.median_freshness, 0);
+    var listings = Math.max(0, Math.round(num(data.listings, 0)));
+
+    // Average score gain of one confirmation, taken from the next_action
+    // entries we actually have. Falls back to the model's own arithmetic:
+    // a source_agreement confirmation on the heaviest field.
+    var gains = arr(data.worst).map(function(w){
+      return num(obj(obj(w).next_action).score_gain, null);
+    }).filter(function(g){ return g !== null && g > 0; });
+    var avgGain = gains.length
+      ? gains.reduce(function(a, b){ return a + b; }, 0) / gains.length
+      : 22.5;
+
+    var gap = Math.max(0, TARGET - median);
+    // To move the MEDIAN to 70, at least half the listings must reach 70.
+    var listingsToLift = Math.ceil(listings / 2);
+    var actionsEach = Math.max(1, Math.ceil(gap / avgGain));
+    var confirmations = listingsToLift * actionsEach;
+    var r = Math.max(0.5, num(rate, 4));
+    var hours = confirmations / r;
+
+    return {
+      target: TARGET, median: median, gap: gap, listings: listings,
+      avgGain: avgGain, gainsSampled: gains.length,
+      listingsToLift: listingsToLift, actionsEach: actionsEach,
+      confirmations: confirmations, rate: r, hours: hours,
+      shifts: hours / 3, weeks: hours / 40
+    };
+  }
+
+  function renderCost(data){
+    var slot = document.getElementById("cost-slot");
+    if(!slot) return;
+    costState.data = data;
+    clear(slot);
+
+    var intro = el("p", "note");
+    intro.style.marginTop = "0";
+    intro.textContent = "Every listing in the report carries a next action with a score gain. " +
+      "Average those, work out how many listings have to clear 70 to drag the median there, " +
+      "and you get an hours figure. Here is the whole calculation, in the open.";
+    slot.appendChild(intro);
+
+    var rateRow = el("div", "rate-row");
+    var lab = el("label", null, "Confirmations a volunteer can complete per hour:");
+    lab.setAttribute("for", "rate-input");
+    rateRow.appendChild(lab);
+    var input = document.createElement("input");
+    input.type = "range";
+    input.id = "rate-input";
+    input.min = "1"; input.max = "12"; input.step = "1";
+    input.value = String(costState.rate);
+    rateRow.appendChild(input);
+    var out = el("output", null, costState.rate + " / hour");
+    out.id = "rate-output";
+    rateRow.appendChild(out);
+    slot.appendChild(rateRow);
+
+    var tiles = el("div", "cost-grid");
+    tiles.id = "cost-tiles";
+    slot.appendChild(tiles);
+
+    var working = el("ol", "working");
+    working.id = "cost-working";
+    slot.appendChild(working);
+
+    var caveat = el("div", "caveat");
+    caveat.innerHTML = "<b>Read this as arithmetic, not a promise.</b> It assumes every confirmation " +
+      "lands the average gain, that confirmations are independent, and that a listing lifted to 70 " +
+      "stays there &mdash; none of which is true: the clock restarts decaying the moment you finish, " +
+      "and the short half-life fields need re-confirming twice a year forever. " +
+      "The honest use of this number is to size the problem, not to schedule it.";
+    slot.appendChild(caveat);
+
+    input.addEventListener("input", function(){
+      costState.rate = num(input.value, 4);
+      var o = document.getElementById("rate-output");
+      if(o) o.textContent = costState.rate + " / hour";
+      updateCost();
+    });
+
+    updateCost();
+  }
+
+  function updateCost(){
+    var data = costState.data;
+    if(!data) return;
+    var m;
+    try{ m = costModel(data, costState.rate); }
+    catch(e){ console.error("cost model failed", e); return; }
+
+    var tiles = document.getElementById("cost-tiles");
+    if(tiles){
+      clear(tiles);
+      function tile(n, l){
+        var t = el("div", "cost-tile");
+        t.appendChild(el("div", "n", n));
+        t.appendChild(el("div", "l", l));
+        tiles.appendChild(t);
+      }
+      tile(fmt1(m.median) + " → " + m.target, "median freshness, today → target");
+      tile(fmtInt(m.confirmations), "field confirmations needed");
+      tile(fmtInt(Math.round(m.hours)), "volunteer-hours at " + m.rate + "/hour");
+      tile(fmtInt(Math.round(m.shifts)), "three-hour volunteer shifts");
+    }
+
+    var w = document.getElementById("cost-working");
+    if(w){
+      clear(w);
+      function step(html){
+        var li = document.createElement("li");
+        li.innerHTML = html;
+        w.appendChild(li);
+      }
+      step("The median today is <b>" + fmt1(m.median) + "</b>. The target is <b>" + m.target +
+        "</b> — the bottom of the <em>fresh</em> band. Gap: <b>" + fmt1(m.gap) + "</b> points.");
+      step("One confirmation is worth <b>+" + fmt1(m.avgGain) + "</b> points on average" +
+        (m.gainsSampled ? ", averaged over the <b>" + m.gainsSampled +
+          "</b> listings in this report that carry a next action" : " (model default)") + ".");
+      step("So each listing needs about <b>" + m.actionsEach +
+        "</b> confirmation" + (m.actionsEach === 1 ? "" : "s") + " to clear 70.");
+      step("A median moves when the middle listing moves: at least half of the <b>" +
+        fmtInt(m.listings) + "</b> listings — <b>" + fmtInt(m.listingsToLift) +
+        "</b> of them — have to get there.");
+      step("<b>" + fmtInt(m.listingsToLift) + "</b> listings × <b>" + m.actionsEach +
+        "</b> = <b>" + fmtInt(m.confirmations) + "</b> confirmations, which at <b>" + m.rate +
+        "</b> per hour is <b>" + fmtInt(Math.round(m.hours)) + "</b> volunteer-hours — about <b>" +
+        fmt1(m.weeks) + "</b> full-time weeks, or <b>" + fmtInt(Math.round(m.shifts)) +
+        "</b> three-hour shifts.");
+      step("An agent that confirms automatically where the organisation&rsquo;s own site agrees " +
+        "does not remove this work — it earns <code>source_agreement</code> (90), not " +
+        "<code>human_verified</code> (100), and it only helps on listings whose site is reachable and parseable.");
+    }
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Boot: API → static file → bundled demo. Never renders blank.
+   * ------------------------------------------------------------------ */
+  function render(data, isDemo, sourceLabel){
+    data = obj(data);
+    var slot = document.getElementById("demo-banner-slot");
+    if(slot){
+      clear(slot);
+      if(isDemo){
+        slot.appendChild(el("div", "demo-banner",
+          "Showing bundled demo data — /api/freshness and ../out/freshness.json could not be loaded. " +
+          "The numbers below are from a real run, but they are frozen."));
+      }
+    }
+    try{ renderHeadline(data); }catch(e){ console.error("headline render failed", e); }
+    try{ renderDecay(data); }catch(e){ console.error("decay render failed", e); }
+    try{ renderLadder(); }catch(e){ console.error("ladder render failed", e); }
+    try{ renderWorst(data); }catch(e){ console.error("worst render failed", e); }
+    try{ renderCost(data); }catch(e){ console.error("cost render failed", e); }
+
+    var foot = document.getElementById("generated-note");
+    if(foot){
+      var when = str(data.generated_at, null);
+      var pretty = when;
+      if(when){
+        var d = new Date(when);
+        if(!isNaN(d.getTime())) pretty = d.toLocaleString();
+      }
+      foot.textContent = "Freshness model: freshness.py · source: " +
+        (sourceLabel || "unknown") + (pretty ? " · generated " + pretty : "");
+    }
+  }
+
+  function getJSON(url){
+    return fetch(url).then(function(res){
+      if(!res.ok) throw new Error(url + " -> " + res.status);
+      return res.json();
+    }).then(function(j){
+      if(!j || typeof j !== "object") throw new Error(url + " -> not an object");
+      return j;
+    });
+  }
+
+  function loadFreshness(){
+    return getJSON("/api/freshness")
+      .then(function(data){ return { data: data, isDemo: false, source: "/api/freshness" }; })
+      .catch(function(e1){
+        console.info("/api/freshness unavailable:", e1 && e1.message);
+        return getJSON("../out/freshness.json")
+          .then(function(data){ return { data: data, isDemo: false, source: "../out/freshness.json" }; })
+          .catch(function(e2){
+            console.warn("Falling back to DEMO_DATA:", e2 && e2.message);
+            return { data: DEMO_DATA, isDemo: true, source: "bundled demo data" };
+          });
+      });
+  }
+
+  function boot(){
+    if(typeof fetch !== "function"){
+      render(DEMO_DATA, true, "bundled demo data");
+      return;
+    }
+    loadFreshness().then(function(res){
+      render(res.data, res.isDemo, res.source);
+    }).catch(function(err){
+      console.error("boot failed", err);
+      render(DEMO_DATA, true, "bundled demo data");
+    });
+  }
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", boot);
+  } else {
+    boot();
+  }
+})();
+</script>
+
+</body>
+</html>
