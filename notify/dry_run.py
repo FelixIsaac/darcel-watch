@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SF Service Guide Watch -- Spectrum dry run.
+"""shelflife -- Spectrum dry run.
 
 Renders, in the terminal, exactly what a volunteer reviewer would see on
 their phone if we had live Photon/Spectrum credentials: an iMessage/WhatsApp
