@@ -173,29 +173,90 @@ def gather_evidence(website):
 
 
 def check_phone(record, texts):
-    stored = None
+    """Compare the live site against EVERY stored number, not just the first.
+
+    A listing routinely carries ten numbers, one per programme or region. An
+    earlier version compared only the first and "found" that the main line was
+    missing - while it sat in the list two rows down. A number is only absent
+    if it matches none of them.
+    """
+    stored_all = []
     for p in record.get("phones") or []:
-        n = norm_phone(p.get("number"))
+        raw = p.get("number")
+        n = norm_phone(raw)
         if n:
-            stored = p.get("number")
-            stored_norm = n
-            break
-    else:
+            stored_all.append((raw, n, p.get("service_type") or ""))
+    if not stored_all:
         return None
+
+    stored_norms = {n for _, n, _ in stored_all}
 
     for url, t in texts.items():
         for m in PHONE_RE.finditer(t):
             live_norm = norm_phone(m.group())
-            if live_norm and live_norm == stored_norm:
-                return {"field": "phone", "stored": stored, "live": m.group(),
-                         "evidence_url": url, "evidence_quote": m.group(), "match": True}
-    # No match found anywhere we looked - report the first live phone we DID see, if any
+            if live_norm and live_norm in stored_norms:
+                raw = next(r for r, n, _ in stored_all if n == live_norm)
+                return {"field": "phone", "stored": raw, "live": m.group(),
+                        "evidence_url": url, "evidence_quote": m.group(), "match": True}
+
+    # Nothing on the site matched ANY stored number.
+    #
+    # With one stored number that is a straightforward "this looks wrong". With
+    # ten - one per programme or region - it is NOT evidence that any particular
+    # one is wrong, and proposing to replace an arbitrary one is how we produced
+    # a false positive on Meals on Wheels. The honest finding is that the number
+    # on the site is missing from the listing: an addition, not a replacement.
     for url, t in texts.items():
         m = PHONE_RE.search(t)
-        if m:
-            return {"field": "phone", "stored": stored, "live": m.group(),
-                     "evidence_url": url, "evidence_quote": snippet(t, m), "match": False}
+        if not m:
+            continue
+        if len(stored_all) > 1:
+            return {"field": "phone_missing",
+                    "stored": f"not among the {len(stored_all)} numbers on the listing",
+                    "live": m.group(), "evidence_url": url,
+                    "evidence_quote": snippet(t, m), "match": False,
+                    "stored_count": len(stored_all), "addition": True}
+        return {"field": "phone", "stored": stored_all[0][0], "live": m.group(),
+                "evidence_url": url, "evidence_quote": snippet(t, m),
+                "match": False, "stored_count": 1}
     return None
+
+
+def check_phone_format(record):
+    """Stored numbers that cannot be dialled as written.
+
+    Purely structural - no model, no network, no false positives from page
+    scraping. A US number normalises to 10 digits (or 11 with a leading 1).
+    Anything else is either truncated or has an extension concatenated onto it,
+    and in both cases someone typing it into a phone gets nowhere.
+    """
+    bad = []
+    for p in record.get("phones") or []:
+        raw = (p.get("number") or "").strip()
+        digits = re.sub(r"\D", "", raw)
+        if not digits:
+            continue
+        if len(digits) in (10, 11):
+            continue
+        label = p.get("service_type") or "unlabelled"
+        if len(digits) < 10:
+            why = f"only {len(digits)} digits - truncated"
+        else:
+            why = f"{len(digits)} digits - extension run into the number"
+        bad.append(f"{raw} ({label}): {why}")
+    if not bad:
+        return None
+    return {
+        "field": "phone_format",
+        "stored": "; ".join(bad),
+        "live": "not dialable as stored",
+        # The evidence is the stored value itself, so point at the listing.
+        # Every finding carries a source; this one's source is the record.
+        "evidence_url": listing_url(record.get("id")),
+        "evidence_quote": "; ".join(bad),
+        "match": False,
+        "structural": True,
+    }
 
 
 def check_closure(texts):
@@ -376,6 +437,7 @@ def verify(record, api_key=None):
 
     findings = [f for f in (
         check_phone(record, texts), check_closure(texts), check_address(record, texts),
+        check_phone_format(record),
     ) if f]
 
     result = None
