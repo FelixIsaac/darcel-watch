@@ -1,6 +1,6 @@
 {
-  "name": "sfsg-watch",
-  "version": "0.2.0",
+  "name": "shelflife",
+  "version": "0.4.0",
   "description": "Freshness auditing for the SF Service Guide: structural checks, a decay model, and a review app.",
   "scripts": {
     "start": "node --env-file-if-exists=.env notify/spectrum.ts",
@@ -10,15 +10,15 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/FelixIsaac/darcel-watch.git"
+    "url": "git+https://github.com/FelixIsaac/shelflife.git"
   },
   "keywords": [],
   "license": "MIT",
   "type": "module",
   "bugs": {
-    "url": "https://github.com/FelixIsaac/darcel-watch/issues"
+    "url": "https://github.com/FelixIsaac/shelflife/issues"
   },
-  "homepage": "https://github.com/FelixIsaac/darcel-watch#readme",
+  "homepage": "https://github.com/FelixIsaac/shelflife#readme",
   "dependencies": {
     "spectrum-ts": "12.8.0"
   },

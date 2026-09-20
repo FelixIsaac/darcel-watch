@@ -105,7 +105,7 @@ function ensureFresh(): void {
   const mtime = resultsMtime();
   if (mtime === resultsMtimeMs) return;
   rebuildQueue();
-  console.log("[sfsg-watch] out/results.json changed on disk — queue reloaded");
+  console.log("[shelflife] out/results.json changed on disk — queue reloaded");
   logQueueBanner();
 }
 
@@ -240,14 +240,14 @@ function queueBreakdown(): Record<string, number> {
 function logQueueBanner(): void {
   const b = queueBreakdown();
   if (b.reviewable === 0) {
-    console.log(`[sfsg-watch] ${lastLoad.emptyReason ?? "nothing to review"}`);
+    console.log(`[shelflife] ${lastLoad.emptyReason ?? "nothing to review"}`);
     return;
   }
   const parts: string[] = [];
   if (b.structural) parts.push(`${b.structural} broken`);
   parts.push(`${b.discrepancies} proposed change(s)`);
   parts.push(`${b.abstentions} unverified`);
-  console.log(`[sfsg-watch] ${b.reviewable} review(s) ready (${parts.join(", ")})`);
+  console.log(`[shelflife] ${b.reviewable} review(s) ready (${parts.join(", ")})`);
 }
 
 function statePayload(): Record<string, unknown> {
@@ -399,7 +399,7 @@ function startRun(budget: number): { started: boolean; error?: string } {
     proc.stderr.on("data", (c: Buffer) => pump(c, "stderr"));
 
     proc.on("error", (err) => {
-      finish(false, `[sfsg-watch] could not start ${bin} ${step.script}: ${err.message}`);
+      finish(false, `[shelflife] could not start ${bin} ${step.script}: ${err.message}`);
     });
 
     proc.on("close", (code, signal) => {
@@ -413,13 +413,13 @@ function startRun(budget: number): { started: boolean; error?: string } {
       finish(
         false,
         signal
-          ? `[sfsg-watch] ${step.script} was terminated by ${signal} ` +
+          ? `[shelflife] ${step.script} was terminated by ${signal} ` +
               `(not a pipeline failure — something stopped the process)`
-          : `[sfsg-watch] ${step.script} exited with code ${code}`,
+          : `[shelflife] ${step.script} exited with code ${code}`,
       );
     });
 
-    console.log(`[sfsg-watch] ${step.label} started (${bin} ${step.script}, BUDGET=${budget})`);
+    console.log(`[shelflife] ${step.label} started (${bin} ${step.script}, BUDGET=${budget})`);
   };
 
   runStep(0);
@@ -459,7 +459,7 @@ function readJsonFile(file: string): unknown {
     const parsed: unknown = JSON.parse(fs.readFileSync(file, "utf8"));
     return parsed ?? {};
   } catch (err) {
-    console.warn(`[sfsg-watch] ${path.basename(file)} unreadable: ${String(err)}`);
+    console.warn(`[shelflife] ${path.basename(file)} unreadable: ${String(err)}`);
     return {};
   }
 }
@@ -700,7 +700,7 @@ const server = http.createServer((req, res) => {
             res.write(sseFrame({ line, stream: "stdout" }));
           }
         } catch (err) {
-          console.error(`[sfsg-watch] SSE replay failed: ${String(err)}`);
+          console.error(`[shelflife] SSE replay failed: ${String(err)}`);
           res.write(sseFrame({ done: true, ok: false, error: String(err) }));
           res.end();
           return;
@@ -743,7 +743,7 @@ const server = http.createServer((req, res) => {
 
       sendNotFound(res, pathname);
     } catch (err) {
-      console.error(`[sfsg-watch] request failed: ${String(err)}`);
+      console.error(`[shelflife] request failed: ${String(err)}`);
       if (!res.headersSent) {
         res.writeHead(500, { "content-type": "application/json; charset=utf-8" });
       }
@@ -760,16 +760,16 @@ const server = http.createServer((req, res) => {
  * server keeps running: one bad request must not end a demo.
  */
 process.on("uncaughtException", (err) => {
-  console.error(`[sfsg-watch] UNCAUGHT: ${err instanceof Error ? err.stack : String(err)}`);
+  console.error(`[shelflife] UNCAUGHT: ${err instanceof Error ? err.stack : String(err)}`);
 });
 process.on("unhandledRejection", (reason) => {
   console.error(
-    `[sfsg-watch] UNHANDLED REJECTION: ${reason instanceof Error ? reason.stack : String(reason)}`,
+    `[shelflife] UNHANDLED REJECTION: ${reason instanceof Error ? reason.stack : String(reason)}`,
   );
 });
 
 server.on("clientError", (err, socket) => {
-  console.error(`[sfsg-watch] client error: ${err.message}`);
+  console.error(`[shelflife] client error: ${err.message}`);
   if (socket.writable) socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
 });
 
@@ -779,20 +779,20 @@ server.on("error", (err) => {
   const e = err as NodeJS.ErrnoException;
   if (e.code === "EADDRINUSE") {
     console.error(
-      `[sfsg-watch] port ${PORT} is already in use — another server is still ` +
+      `[shelflife] port ${PORT} is already in use — another server is still ` +
         `running. Stop it first:  pkill -f notify/web.ts`,
     );
     process.exit(1);
   }
-  console.error(`[sfsg-watch] server error: ${err.message}`);
+  console.error(`[shelflife] server error: ${err.message}`);
 });
 
 server.listen(PORT, HOST, () => {
   const base = `http://${HOST}:${PORT}`;
   logQueueBanner();
-  console.log(`[sfsg-watch] dashboard  ${base}/`);
-  console.log(`[sfsg-watch] review     ${base}/review`);
-  console.log(`[sfsg-watch] graph      ${base}/graph`);
+  console.log(`[shelflife] dashboard  ${base}/`);
+  console.log(`[shelflife] review     ${base}/review`);
+  console.log(`[shelflife] graph      ${base}/graph`);
 });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {

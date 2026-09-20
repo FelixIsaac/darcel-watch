@@ -349,7 +349,7 @@ function normalise(raw: unknown, kind: ReviewKind): ReviewItem | null {
           ...(orgWebsite ? { org_website: orgWebsite } : {}),
           submitted_by: str(
             cr.submitted_by,
-            "sfsg-watch (agent, human review required)",
+            "shelflife (agent, human review required)",
           ),
         }
       : null;
@@ -534,7 +534,7 @@ function appendOutcome(filePath: string, record: unknown): void {
     } catch {
       const aside = `${filePath}.corrupt-${Date.now()}`;
       fs.renameSync(filePath, aside);
-      console.warn(`[sfsg-watch] ${filePath} was unreadable; moved to ${aside}`);
+      console.warn(`[shelflife] ${filePath} was unreadable; moved to ${aside}`);
       existing = [];
     }
   }

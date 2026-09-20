@@ -32,7 +32,7 @@ API = os.environ.get("SFSG_API", "https://www.sfserviceguide.org/api/v2")
 # lets us diff old against new).
 DATA = pathlib.Path(__file__).parent / "data_v2"
 CURATION_CSV = DATA / "_content_curation_dataset.csv"
-UA = {"User-Agent": "sfsg-watch/0.2 (Hack for Humanity SF; read-only)"}
+UA = {"User-Agent": "shelflife/0.4 (Hack for Humanity SF; read-only)"}
 WORKERS = 6  # be polite: their API serves the live site
 
 

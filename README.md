@@ -1,8 +1,22 @@
-# SF Service Guide Watch
+# shelflife
 
-Named for Darcel Jackson, who founded ShelterTech after being injured as a welder in San Francisco and becoming unhoused. ShelterTech built the SF Service Guide so the next person in that situation could find help. SF Service Guide Watch exists to keep that guide accurate.
+**Every fact in a civic directory has a shelf life.** A phone number stays true
+for years; opening hours for months. A perfectly formatted phone number for an
+organisation that closed in 2019 is still perfectly formatted — being well-formed
+is not being true.
 
-Built at Hack for Humanity: San Francisco, 19 Sep 2026 (Entrepreneurs First, co-hosted by MLH, powered by Google Gemini). Built at a hackathon.
+shelflife finds contact data that is provably broken, checks everything else
+against each organisation's own website, scores how much evidence there is that
+each fact is still current, and **abstains when it isn't sure.**
+
+Built against [ShelterTech](https://sheltertech.org)'s
+[SF Service Guide](https://sfserviceguide.org) — 813 approved organisations —
+read-only, at Hack for Humanity: San Francisco, 19 Sep 2026.
+
+```
+support    ≥ 0.69   precision 1.000   recall 0.867     held out, 43 orgs
+contradict ≥ 0.99   12 flagged, 0 of them actually on the page
+```
 
 > **[`FACTS.md`](FACTS.md) is the single source of truth for every number in this repo** — what was measured, how, and what we got wrong. Six claims have been retracted from this project so far. If a number appears here and not there, it is a bug in this README. See [What we got wrong](#what-we-got-wrong) below.
 
@@ -91,7 +105,7 @@ Lead example: **Building Futures**, a domestic violence services organisation, h
 
 ### The live run: structural checks carry the confident findings, the model mostly abstains
 
-At `BUDGET=25` against the full v2-sourced corpus, the current run produces 33 checked listings: **8 discrepancies (all structural, the phone defects above), 4 abstained, 21 matched.** The abstain/match split moves between runs — the model is not deterministic — so treat those two as a snapshot and re-run to check. Every model-adjudicated finding in this run came back **abstain or match** — none of the discrepancies in this run came from the model's judgment alone. One abstention: the regex evidence-gatherer found what looked like a phone number on an org's page (Grassroots Open Assistive Tech) but it was actually a Zoom meeting ID — the model declined to treat it as a phone match or mismatch.
+At `BUDGET=25` against the full v2-sourced corpus, the current run produces 33 checked listings: **8 discrepancies (all structural, the phone defects above), 3 abstained, 22 matched.** The abstain/match split moves between runs — the model is not deterministic — so treat those two as a snapshot and re-run to check. Every model-adjudicated finding in this run came back **abstain or match** — none of the discrepancies in this run came from the model's judgment alone. One abstention: the regex evidence-gatherer found what looked like a phone number on an org's page (Grassroots Open Assistive Tech) but it was actually a Zoom meeting ID — the model declined to treat it as a phone match or mismatch.
 
 We're stating this plainly because it's the designed outcome, not a limitation: we tightened the adjudication prompt twice specifically to make it more conservative, and it got more conservative. The cheap structural check now carries every confident finding in this run. The model's job is judgment on genuinely ambiguous scraped evidence, and abstaining there is it doing that job correctly.
 
@@ -209,6 +223,8 @@ npm run web    # http://localhost:8787 - Dashboard / Review / Graph / Freshness
 
 ## Credits
 
-Built against [ShelterTech](https://sheltertech.org)'s [SF Service Guide](https://sfserviceguide.org) and its public API. Named for Darcel Jackson. This project only exists because ShelterTech already built and open-sourced the thing worth improving.
+Built against [ShelterTech](https://sheltertech.org)'s [SF Service Guide](https://sfserviceguide.org) and its public API, read-only.
+
+ShelterTech was founded by **Darcel Jackson**, who became unhoused after being injured as a welder in San Francisco, and who built the directory so the next person in that situation could find help. This project only exists because ShelterTech already built and open-sourced the thing worth improving, and it is not a criticism of how they maintain it.
 
 ShelterTech maintain the guide with volunteers and paid community representatives — including people with lived experience of homelessness — on a programme budget they put at roughly $200,000 a year. Their help centre describes datathons every two weeks with a final review by the Homeless Advocacy Project; **that article is dated 5 November 2019, so we can't assert what the cadence is today.** Nothing in this repo is a claim that they aren't doing the work. They are. It is a claim that the data doesn't record what was checked, which is a different and much smaller problem.

@@ -55,7 +55,7 @@ from collections import deque
 
 UA = {
     "User-Agent": (
-        "sfsg-watch/0.3 (+https://github.com/FelixIsaac/darcel-watch) "
+        "shelflife/0.4 (+https://github.com/FelixIsaac/shelflife) "
         "civic-directory-freshness-audit; read-only"
     )
 }
@@ -88,7 +88,7 @@ _DATE_RE = re.compile(r"(\d{4}-\d{2}-\d{2})")
 def registered_domain(url_or_host: str) -> str:
     """Last two labels of the hostname, lowercased.
 
-    Deliberately the same crude rule agent.py uses, and deliberately NOT a
+    Deliberately crude, and deliberately NOT a
     public-suffix lookup: this is an allowlist check, and the failure mode of
     being too strict (refusing bfwc.org -> cdn.bfwc.org) is a missed fetch,
     while the failure mode of being too loose is fetching somebody else's site.

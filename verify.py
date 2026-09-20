@@ -22,7 +22,7 @@ import envfile
 envfile.load()
 
 DATA = pathlib.Path(__file__).parent / "data_v2"
-UA = {"User-Agent": "sfsg-watch/0.2 (Hack for Humanity SF; read-only)"}
+UA = {"User-Agent": "shelflife/0.4 (Hack for Humanity SF; read-only)"}
 API = os.environ.get("SFSG_API", "https://www.sfserviceguide.org/api/v2")
 FETCH_TIMEOUT = 12
 MAX_FETCHES = 3
@@ -100,7 +100,7 @@ def call_model(prompt, api_key):
                 {
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
-                    "HTTP-Referer": "https://github.com/FelixIsaac/darcel-watch",
+                    "HTTP-Referer": "https://github.com/FelixIsaac/shelflife",
                     "X-Title": "SF Service Guide Watch",
                 },
             )
@@ -147,7 +147,7 @@ def edit_url(record):
 
 # Phone/address normalisation lives in normalize.py because the graph backends
 # key their phone and address nodes on exactly these functions - a second copy
-# drifts silently. Re-exported here: agent.py calls verify.norm_phone.
+# drifts silently. Re-exported here for callers that import from verify.
 from normalize import norm_phone, phone_digits  # noqa: E402,F401
 
 
@@ -605,7 +605,7 @@ def build_change_request(record, findings, verdict):
         "proposed": proposed,
         "source_url": bad["evidence_url"],
         "source_quote": bad["evidence_quote"],
-        "submitted_by": "darcel-watch (agent, human review required)",
+        "submitted_by": "shelflife (agent, human review required)",
         "posted": False,
     }
     # NOTE: EMITTED ONLY. We never POST to /api/v2/resources/:id/change_requests
@@ -614,45 +614,15 @@ def build_change_request(record, findings, verdict):
     # issues no write request of any kind. A human reviews and submits it.
 
 
-def _agent_verdict(record, api_key):
-    """Opt-in tool-calling path (AGENT=1). Returns a verdict dict or None.
-
-    None means "deterministic path please" and is returned for every failure
-    mode: no key, agent import broken, model unreachable, anything raised. The
-    agent is an upgrade to how evidence is gathered, not a new way for a run to
-    die - a venue hotspot at 2am must degrade to regex, not to a traceback.
-
-    Deliberately off by default. The deterministic path is what we have measured
-    and retracted findings from; the agent is newer and less proven, and this
-    project has already shipped three findings it had to take back.
-    """
-    if os.environ.get("AGENT") != "1" or not api_key:
-        return None
-    try:
-        import agent  # imported lazily so a syntax error there can't break verify
-        result = agent.investigate(record, api_key)
-    except Exception:
-        return None
-    if not isinstance(result, dict) or result.get("verdict") not in (
-        "discrepancy", "match", "abstain"
-    ):
-        return None
-    # The agent reports separately on "I looked and could not tell" (a real
-    # abstention, keep it) and "I never reached the model" (a dead key, a quota
-    # wall, a Google key on an OpenAI-shaped API). Only the first is an answer.
-    # Without this the second silently abstains on every listing in the run,
-    # which looks like a verified result and is not one.
-    if result.get("agent_unavailable"):
-        return None
-    return result
-
-
 def verify(record, api_key=None):
-    """Re-verify one AskDarcel record against its live website. Never raises."""
-    agent_result = _agent_verdict(record, api_key)
-    if agent_result is not None:
-        return agent_result
+    """Re-verify one listing against its live website. Never raises.
 
+    An opt-in tool-calling agent used to sit in front of this (AGENT=1), 899
+    lines shipped off by default because it was, in its own docstring, "newer
+    and less proven". audit.py supersedes it with a path that is measured and
+    calibrated, so it has been removed rather than left as dead code in a
+    public repo. It is in git history if it is ever wanted back.
+    """
     rid = record.get("id")
     name = record.get("name", "")
     website = record.get("website")

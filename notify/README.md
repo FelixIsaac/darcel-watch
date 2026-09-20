@@ -250,7 +250,7 @@ later run. Skips are not persisted, because "skip" means *not me*, not *never*.
     "proposed": "510.777.9560",
     "source_url": "https://www.feedingseniors.org",
     "source_quote": "…1721 Broadway #201, Oakland, CA, 94612 510.777.9560 (text or voice)…",
-    "submitted_by": "darcel-watch (agent, human review required)"
+    "submitted_by": "shelflife (agent, human review required)"
   },
   "decision": "confirmed",
   "resource_id": 2258,

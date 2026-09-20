@@ -36,7 +36,7 @@ from graph import norm_addr, norm_phone  # single source of truth for keys
 
 HOST = os.environ.get("FALKORDB_HOST", "localhost")
 PORT = int(os.environ.get("FALKORDB_PORT", 6379))
-GRAPH_NAME = os.environ.get("FALKORDB_GRAPH", "darcel_watch")
+GRAPH_NAME = os.environ.get("FALKORDB_GRAPH", "shelflife")
 
 # kind -> extra label. Order fixed so generated Cypher is stable/cacheable.
 LABELS = {

@@ -211,12 +211,12 @@ async function main(): Promise<void> {
   // Nothing to review is a normal outcome, not an error. Say so and exit 0
   // rather than opening a chat client to show somebody an empty queue.
   if (!banner) {
-    console.log(`[sfsg-watch] ${load.emptyReason}`);
+    console.log(`[shelflife] ${load.emptyReason}`);
     return;
   }
 
   const transport = chooseTransport();
-  console.log(`[sfsg-watch] ${banner} · transport: ${transport.description}`);
+  console.log(`[shelflife] ${banner} · transport: ${transport.description}`);
 
   const { spectrum, space } = await connect(transport);
 
@@ -283,7 +283,7 @@ async function main(): Promise<void> {
         await active.handleText(contentToText(message.content));
       } catch (err) {
         // One bad reply must not take down the session for everyone else.
-        console.error(`[sfsg-watch] error handling reply: ${String(err)}`);
+        console.error(`[shelflife] error handling reply: ${String(err)}`);
       }
 
       // Everyone who was reviewing has stopped, or the queue is drained.
@@ -331,9 +331,9 @@ function explain(err: unknown): string | null {
 main().catch((err: unknown) => {
   const hint = explain(err);
   if (hint) {
-    console.error(`\n[sfsg-watch] ${hint}\n`);
+    console.error(`\n[shelflife] ${hint}\n`);
   } else {
-    console.error(`[sfsg-watch] ${err instanceof Error ? err.stack : String(err)}`);
+    console.error(`[shelflife] ${err instanceof Error ? err.stack : String(err)}`);
   }
   process.exitCode = 1;
 });

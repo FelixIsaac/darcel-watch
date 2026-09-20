@@ -42,7 +42,7 @@ HREF_RE = re.compile(r'<a\b[^>]*\bhref\s*=\s*["\']([^"\'#][^"\']*)["\']', re.I)
 MD_LINK_RE = re.compile(r"\]\((https?://[^)\s]+)\)")
 
 CACHE = pathlib.Path(__file__).parent / "cache"
-UA = {"User-Agent": "sfsg-watch/0.3 (Hack for Humanity SF; read-only)"}
+UA = {"User-Agent": "shelflife/0.4 (Hack for Humanity SF; read-only)"}
 TIMEOUT = 12
 READER_TIMEOUT = 45  # it renders the page for us, so it is slow by design
 READER = "https://r.jina.ai/"
