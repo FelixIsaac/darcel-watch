@@ -75,8 +75,17 @@ export interface ChangeRequest {
   submitted_by: string;
 }
 
-/** What kind of question this review asks. */
-export type ReviewKind = "discrepancy" | "abstention";
+/**
+ * What kind of question this review asks. Three genuinely different questions —
+ * collapsing any of them into "confirm / reject" makes it meaningless.
+ *
+ *   discrepancy  the agent found a different value and proposes it
+ *   abstention   the agent could not establish the truth at all
+ *   structural   the stored value is malformed on its face — it cannot be
+ *                dialled as written. There is no proposed replacement, because
+ *                nobody knows the right number; only that this one is wrong.
+ */
+export type ReviewKind = "discrepancy" | "abstention" | "structural";
 
 /** Every action a volunteer can take, across both kinds. */
 export type Action =
@@ -98,6 +107,10 @@ const OUTCOME_FILE: Record<Exclude<Action, "skip">, string> = {
 export const ACTIONS_FOR: Record<ReviewKind, Action[]> = {
   discrepancy: ["confirm", "reject", "skip"],
   abstention: ["looks_right", "needs_fixing", "skip"],
+  // "Is this broken?" — so the affirmative answer comes first, and it means
+  // needs_fixing. Same two outcome files as an abstention, opposite ordering,
+  // because the question is inverted.
+  structural: ["needs_fixing", "looks_right", "skip"],
 };
 
 /**
@@ -111,8 +124,13 @@ export interface ReviewItem {
   name: string;
   field: string;
   stored: string;
-  /** Empty for an abstention: there is no proposed replacement. */
+  /** Empty unless the agent is proposing a replacement value. */
   live: string;
+  /**
+   * For a structural finding: what is wrong with the stored value
+   * ("not dialable as stored"). Never a replacement — see ReviewKind.
+   */
+  defect: string;
   sourceUrl: string;
   sourceQuote: string;
   /** The listing on SF Service Guide — the "stored" side's own page. */
@@ -181,6 +199,10 @@ function url(v: unknown): string {
  */
 const FIELD_WORDS: Record<string, string> = {
   phone: "phone number",
+  // A structural finding is about the number itself, not about "format" —
+  // "this listing's phone format can't be dialled" reads like jargon.
+  phone_format: "phone number",
+  phone_missing: "phone number",
   address: "address",
   hours: "opening hours",
   website: "website",
@@ -227,22 +249,38 @@ function normalise(raw: unknown, kind: ReviewKind): ReviewItem | null {
   if (resourceId === null || str(resourceId) === "") return null;
 
   const cr = isRecord(raw.change_request) ? raw.change_request : {};
+
   // `fields` is the agent's raw evidence; change_request is its distilled
-  // proposal. Prefer the proposal, fall back to the first evidence row.
+  // proposal. A record often carries SEVERAL findings — #2258 arrives with a
+  // weak `phone_missing` inference at [0] and a hard `phone_format` defect at
+  // [1]. Taking [0] blindly buries the certain finding behind the speculative
+  // one, so pick the most actionable: a structural defect is arithmetic on the
+  // stored value and cannot be a scraping false positive, so it wins.
+  const allFields = Array.isArray(raw.fields) ? raw.fields.filter(isRecord) : [];
   const firstField =
-    Array.isArray(raw.fields) && isRecord(raw.fields[0]) ? raw.fields[0] : {};
+    allFields.find((f) => f.structural === true) ?? allFields[0] ?? {};
 
   // A discrepancy is always about one field — that's what makes it a proposed
   // change. An abstention usually isn't: the agent couldn't reach the site at
   // all, so it has no field, no stored value and no opinion. Requiring a field
   // here would silently drop every abstention, which is most of the queue and
   // exactly the case that most needs a human.
-  const field =
-    str(cr.field) || str(firstField.field) || (kind === "abstention" ? "listing" : "");
+  // When a structural defect is present it IS the review, so it is read
+  // straight off its own field rather than through `change_request` — which
+  // describes whichever finding the pipeline distilled, not this one.
+  const structuralField = allFields.find((f) => f.structural === true);
+
+  const field = structuralField
+    ? str(structuralField.field)
+    : str(cr.field) || str(firstField.field) || (kind === "abstention" ? "listing" : "");
   if (!field) return null;
 
-  const stored = str(cr.current) || str(firstField.stored);
-  let live = str(cr.proposed) || str(firstField.live);
+  const stored = structuralField
+    ? str(structuralField.stored)
+    : str(cr.current) || str(firstField.stored);
+  let live = structuralField
+    ? str(structuralField.live)
+    : str(cr.proposed) || str(firstField.live);
 
   // Defensive, regardless of what the JSON says: a "change" from a value to
   // the same value is not a change. verify.py now filters these out, but a
@@ -250,20 +288,43 @@ function normalise(raw: unknown, kind: ReviewKind): ReviewItem | null {
   // itself — that reads as a bug to the volunteer, and it is one.
   if (live && stored && live === stored) live = "";
 
+  // A structural finding says the STORED value is malformed — `live` carries a
+  // description of the defect ("not dialable as stored"), never a replacement.
+  // Rendering it as a proposed new value produces the nonsense question
+  // "should it be changed to 'not dialable as stored'?".
+  const isStructural =
+    structuralField !== undefined ||
+    raw.structural === true ||
+    cr.structural === true ||
+    field === "phone_format";
+
   // A discrepancy with nothing to propose isn't a discrepancy; it's really an
   // abstention, and asking "should it be changed to (nothing)?" is nonsense.
-  const effectiveKind: ReviewKind =
-    kind === "discrepancy" && !live ? "abstention" : kind;
+  const effectiveKind: ReviewKind = isStructural
+    ? "structural"
+    : kind === "discrepancy" && !live
+      ? "abstention"
+      : kind;
+
+  // Past this point `live` means "the value being proposed". A structural
+  // finding has none, so it is cleared rather than left to leak into a diff.
+  const defect = isStructural ? live : "";
+  if (isStructural) live = "";
 
   if (effectiveKind === "discrepancy" && !live) return null;
+  if (effectiveKind === "structural" && !stored) return null;
   // An abstention is worth a volunteer's time as long as they can act on it —
   // which means a place to look. Without a website there is nothing to check.
   const hasSomewhereToLook =
     url(raw.org_website) || url(cr.org_website) || url(raw.listing_url) || stored;
   if (effectiveKind === "abstention" && !hasSomewhereToLook) return null;
 
-  const sourceUrl = url(cr.source_url) || url(firstField.evidence_url);
-  const sourceQuote = str(cr.source_quote) || str(firstField.evidence_quote);
+  const sourceUrl = structuralField
+    ? url(structuralField.evidence_url)
+    : url(cr.source_url) || url(firstField.evidence_url);
+  const sourceQuote = structuralField
+    ? ""  // the "quote" is just the stored value repeated; already on screen
+    : str(cr.source_quote) || str(firstField.evidence_quote);
 
   const orgWebsite = url(raw.org_website) || url(cr.org_website);
   const listingUrl = url(raw.listing_url) || url(cr.listing_url);
@@ -300,6 +361,7 @@ function normalise(raw: unknown, kind: ReviewKind): ReviewItem | null {
     field,
     stored,
     live,
+    defect,
     sourceUrl,
     sourceQuote,
     listingUrl,
@@ -564,6 +626,15 @@ function clip(s: string, max: number): string {
 
 /** The question this review is actually asking, in plain words. */
 export function askLine(item: ReviewItem): string {
+  if (item.kind === "structural") {
+    // No website was consulted and none is needed: the stored value is
+    // self-evidently unusable. The question is whether to flag it, not what
+    // to replace it with — nobody knows that yet.
+    return (
+      `This listing's ${fieldLabel(item.field)} can't be dialled as stored. ` +
+      `Should it be flagged for correction?`
+    );
+  }
   if (item.kind === "abstention") {
     const what =
       item.field === "listing"
@@ -578,8 +649,19 @@ export function askLine(item: ReviewItem): string {
   );
 }
 
-/** Human label for each action, per kind. */
-export function actionLabel(action: Action): string {
+/**
+ * Human label for each action, in the words of the question being asked.
+ *
+ * The same recorded outcome reads differently depending on the question. A
+ * structural finding asks "is this broken?", so `needs_fixing` is "Yes, it's
+ * broken" — not "Needs fixing", which would be an odd answer to a yes/no.
+ */
+export function actionLabel(action: Action, kind: ReviewKind = "discrepancy"): string {
+  if (kind === "structural") {
+    if (action === "needs_fixing") return "Yes, it's broken";
+    if (action === "looks_right") return "No, it's fine";
+    return "Skip";
+  }
   switch (action) {
     case "confirm":
       return "Yes, change it";
@@ -627,6 +709,24 @@ export function reviewCard(
     askLine(item),
     "",
   ];
+
+  // A structural finding has one side, not two: the stored value and what is
+  // wrong with it. There is no arrow because there is nothing to point at.
+  if (item.kind === "structural") {
+    lines.push(`${fieldLabel(item.field)} as stored:`);
+    for (const part of item.stored.split(";")) {
+      const trimmed = part.trim();
+      if (trimmed) lines.push(`  ${trimmed}`);
+    }
+    if (item.defect) lines.push(`  → ${item.defect}`);
+    if (item.listingUrl) {
+      lines.push("", `The listing: ${item.listingUrl}`);
+    }
+    if (affordances === "text") {
+      lines.push("", "Y it's broken · N it's fine · S skip · ? more evidence");
+    }
+    return lines.join("\n");
+  }
 
   // Both sides, each labelled with where it came from. A reviewer under time
   // pressure must never have to work out which of two URLs is which.
@@ -736,15 +836,29 @@ export function outcomeMessage(item: ReviewItem, action: Action): string {
         `the agent was wrong, and that's worth knowing.`
       );
     case "looks_right":
+      if (item.kind === "structural") {
+        return (
+          `Recorded #${item.resourceId} as fine as stored — you checked it, ` +
+          `the agent was wrong. Saved to out/verified.json.`
+        );
+      }
       return (
         `Marked #${item.resourceId} as verified by you, on today's date. ` +
         `Saved to out/verified.json.\nMost listings have never had that.`
       );
-    case "needs_fixing":
-      return (
-        `Flagged #${item.resourceId} for manual follow-up. ` +
-        `Saved to out/flagged.json.`
-      );
+    case "needs_fixing": {
+      const lines = [
+        item.kind === "structural"
+          ? `Flagged #${item.resourceId}: the stored ${fieldLabel(item.field)} ` +
+            `can't be dialled. Saved to out/flagged.json.`
+          : `Flagged #${item.resourceId} for manual follow-up. ` +
+            `Saved to out/flagged.json.`,
+      ];
+      // Same follow-through as a confirm: they've decided it's wrong, so the
+      // useful next thing is where to fix it.
+      if (item.listingEditUrl) lines.push("", `Fix it here: ${item.listingEditUrl}`);
+      return lines.join("\n");
+    }
     default:
       return `Skipped #${item.resourceId}.`;
   }
@@ -915,7 +1029,8 @@ export class ReviewQueue {
   }
 
   /** Apply one action to the open review and move on. */
-  apply(action: Action): ApplyResult {
+  apply(requested: Action): ApplyResult {
+    let action: Action = requested;
     const open = this.current();
     if (!open) {
       return {
@@ -928,10 +1043,19 @@ export class ReviewQueue {
 
     const { item, index } = open;
 
+    // A structural review is a yes/no question ("is this broken?"), and it is
+    // presented that way — "Y it's broken · N it's fine". So a yes/no answer
+    // has to land on the right outcome rather than being refused on a
+    // technicality the volunteer never saw.
+    if (item.kind === "structural") {
+      if (action === "confirm") action = "needs_fixing";
+      else if (action === "reject") action = "looks_right";
+    }
+
     // Reject an action that doesn't belong to this kind of review, rather than
     // silently recording something the volunteer didn't mean.
     if (!ACTIONS_FOR[item.kind].includes(action)) {
-      const offered = ACTIONS_FOR[item.kind].map(actionLabel).join(" · ");
+      const offered = ACTIONS_FOR[item.kind].map((a) => actionLabel(a, item.kind)).join(" · ");
       return {
         ok: false,
         message:
@@ -1144,7 +1268,7 @@ export class ReviewSession {
       default: {
         const open = this.queue.current();
         const offered = open
-          ? ACTIONS_FOR[open.item.kind].map(actionLabel).join(" · ")
+          ? ACTIONS_FOR[open.item.kind].map((a) => actionLabel(a, open.item.kind)).join(" · ")
           : "queue · stop";
         await this.send(`Didn't catch that. Options: ${offered}. Or \`help\`.`);
       }

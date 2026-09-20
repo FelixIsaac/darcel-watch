@@ -8,10 +8,12 @@
  *   GET  /                    the dashboard        (ui/index.html)
  *   GET  /review              the review thread    (ui/review.html)
  *   GET  /graph               the graph explorer   (ui/graph.html)
+ *   GET  /freshness           the freshness report (ui/freshness.html)
  *   GET  /ui/*                static passthrough
  *
  *   GET  /api/results         out/results.json, or {} if absent
  *   GET  /api/graph           out/graph.json, or {} if absent
+ *   GET  /api/freshness       out/freshness.json, or {} if absent
  *   GET  /api/state           recorded decisions + counts
  *   GET  /api/review/current  the open review, or {done:true, summary}
  *   POST /api/review/reply    {action} -> the next review
@@ -43,6 +45,7 @@ import {
   loadDecisions,
   loadQueue,
   parseCommand,
+  RESULTS_PATH,
   ReviewQueue,
   storedLabel,
   type Action,
@@ -73,6 +76,37 @@ let queue = new ReviewQueue(lastLoad.items, "web-reviewer", "web");
 function rebuildQueue(): void {
   lastLoad = loadQueue();
   queue = new ReviewQueue(lastLoad.items, "web-reviewer", "web");
+  resultsMtimeMs = resultsMtime();
+}
+
+function resultsMtime(): number {
+  try {
+    return fs.statSync(RESULTS_PATH).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
+
+let resultsMtimeMs = resultsMtime();
+
+/**
+ * Pick up a results.json written by anything other than `/api/run`.
+ *
+ * The pipeline is just as often run from a terminal as from the dashboard, and
+ * a server that only reloads on its own runs will happily serve an empty queue
+ * while the file on disk holds a dozen reviews. Anyone who does that and then
+ * refreshes the browser concludes the app is broken.
+ *
+ * An mtime check on each read is cheap and needs no watcher. Already-recorded
+ * decisions survive, because `loadQueue()` reads them back from the outcome
+ * files and excludes them.
+ */
+function ensureFresh(): void {
+  const mtime = resultsMtime();
+  if (mtime === resultsMtimeMs) return;
+  rebuildQueue();
+  console.log("[sfsg-watch] out/results.json changed on disk — queue reloaded");
+  logQueueBanner();
 }
 
 /** Serialise state-changing review calls; two taps must not double-file. */
@@ -111,6 +145,10 @@ function itemForClient(item: ReviewItem, position: number) {
     listing_url: item.listingUrl || null,
     live: item.live || null,
     live_label: item.live ? liveLabel(item) : null,
+    // What is wrong with the stored value, for a structural finding. Never a
+    // replacement — the UI must not render it as one.
+    defect: item.defect || null,
+    structural: item.kind === "structural",
     source_url: item.sourceUrl || null,
     source_quote: item.sourceQuote || null,
     org_website: item.orgWebsite || null,
@@ -121,7 +159,7 @@ function itemForClient(item: ReviewItem, position: number) {
     evidence: evidenceCard(item),
     position,
     total: queue.total,
-    actions: ACTIONS_FOR[item.kind].map((a) => ({ action: a, label: actionLabel(a) })),
+    actions: ACTIONS_FOR[item.kind].map((a) => ({ action: a, label: actionLabel(a, item.kind) })),
   };
 }
 
@@ -268,6 +306,21 @@ function broadcast(data: unknown): void {
   }
 }
 
+/**
+ * The audit, then the freshness scoring, as one streamed run.
+ *
+ * `run.py` answers "is anything wrong"; `freshness.py` answers "has anyone
+ * confirmed this recently" — different questions over the same corpus, and the
+ * freshness page goes stale the moment results.json is regenerated without it.
+ * They are chained rather than parallel because the second reads what the first
+ * writes. Failure of either ends the run; freshness takes well under a second,
+ * so it costs the demo nothing.
+ */
+const PIPELINE_STEPS: { script: string; label: string }[] = [
+  { script: "run.py", label: "audit" },
+  { script: "freshness.py", label: "freshness" },
+];
+
 function startRun(budget: number): { started: boolean; error?: string } {
   if (run.proc && !run.done) {
     return { started: false, error: "A pipeline run is already in progress." };
@@ -279,18 +332,6 @@ function startRun(budget: number): { started: boolean; error?: string } {
   run.error = null;
 
   const bin = pythonBin();
-  const proc = spawn(bin, ["run.py"], {
-    cwd: ROOT,
-    env: {
-      ...process.env,
-      BUDGET: String(budget),
-      // Unbuffered, or stdout arrives in one lump at exit and the live stream
-      // — the entire point of this route — shows nothing until it's over.
-      PYTHONUNBUFFERED: "1",
-    },
-  }) as ChildProcessWithoutNullStreams;
-
-  run.proc = proc;
 
   const pump = (chunk: Buffer, stream: "stdout" | "stderr") => {
     for (const raw of chunk.toString("utf8").split(/\r?\n/)) {
@@ -300,9 +341,6 @@ function startRun(budget: number): { started: boolean; error?: string } {
       broadcast({ line, stream });
     }
   };
-
-  proc.stdout.on("data", (c: Buffer) => pump(c, "stdout"));
-  proc.stderr.on("data", (c: Buffer) => pump(c, "stderr"));
 
   const finish = (ok: boolean, note?: string) => {
     if (run.done) return;
@@ -328,28 +366,54 @@ function startRun(budget: number): { started: boolean; error?: string } {
     run.listeners.clear();
   };
 
-  proc.on("error", (err) => {
-    finish(false, `[sfsg-watch] could not start ${bin}: ${err.message}`);
-  });
-
-  proc.on("close", (code, signal) => {
-    if (code === 0) {
+  const runStep = (index: number): void => {
+    const step = PIPELINE_STEPS[index];
+    if (!step) {
       finish(true);
       return;
     }
-    // A null code means the child was terminated by a signal, not by its own
-    // exit. Naming the signal is the difference between "the pipeline failed"
-    // and "something killed the pipeline" — they have nothing in common.
-    finish(
-      false,
-      signal
-        ? `[sfsg-watch] pipeline was terminated by ${signal} ` +
-            `(not a pipeline failure — something stopped the process)`
-        : `[sfsg-watch] pipeline exited with code ${code}`,
-    );
-  });
 
-  console.log(`[sfsg-watch] pipeline started (${bin}, BUDGET=${budget})`);
+    const proc = spawn(bin, [step.script], {
+      cwd: ROOT,
+      env: {
+        ...process.env,
+        BUDGET: String(budget),
+        // Unbuffered, or stdout arrives in one lump at exit and the live
+        // stream — the entire point of this route — shows nothing until it's
+        // over.
+        PYTHONUNBUFFERED: "1",
+      },
+    }) as ChildProcessWithoutNullStreams;
+
+    run.proc = proc;
+    proc.stdout.on("data", (c: Buffer) => pump(c, "stdout"));
+    proc.stderr.on("data", (c: Buffer) => pump(c, "stderr"));
+
+    proc.on("error", (err) => {
+      finish(false, `[sfsg-watch] could not start ${bin} ${step.script}: ${err.message}`);
+    });
+
+    proc.on("close", (code, signal) => {
+      if (code === 0) {
+        runStep(index + 1);
+        return;
+      }
+      // A null code means the child was terminated by a signal, not by its own
+      // exit. Naming the signal is the difference between "the pipeline failed"
+      // and "something killed the pipeline" — they have nothing in common.
+      finish(
+        false,
+        signal
+          ? `[sfsg-watch] ${step.script} was terminated by ${signal} ` +
+              `(not a pipeline failure — something stopped the process)`
+          : `[sfsg-watch] ${step.script} exited with code ${code}`,
+      );
+    });
+
+    console.log(`[sfsg-watch] ${step.label} started (${bin} ${step.script}, BUDGET=${budget})`);
+  };
+
+  runStep(0);
   return { started: true };
 }
 
@@ -454,6 +518,7 @@ const PAGES: Record<string, string> = {
   "/index.html": "index.html",
   "/review": "review.html",
   "/graph": "graph.html",
+  "/freshness": "freshness.html",
 };
 
 const server = http.createServer((req, res) => {
@@ -496,14 +561,29 @@ const server = http.createServer((req, res) => {
         return;
       }
 
+      // Staleness is a different question from brokenness: not "is this value
+      // wrong" but "has anyone confirmed it recently". Scored by freshness.py.
+      if (method === "GET" && pathname === "/api/freshness") {
+        sendJson(res, 200, readJsonFile(path.join(OUT_DIR, "freshness.json")));
+        return;
+      }
+
       if (method === "GET" && pathname === "/api/state") {
+        ensureFresh();
         sendJson(res, 200, statePayload());
         return;
       }
 
       // ---------------- review ----------------
       if (method === "GET" && pathname === "/api/review/current") {
-        sendJson(res, 200, await serialise(() => currentPayload()));
+        sendJson(
+          res,
+          200,
+          await serialise(() => {
+            ensureFresh();
+            return currentPayload();
+          }),
+        );
         return;
       }
 

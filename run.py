@@ -195,6 +195,48 @@ def main():
 
     verdicts = verify.verify_many(candidates, api_key=api_key)
 
+    # Structural checks are free: no fetch, no model, no judgement. They read
+    # the stored value and nothing else, so there is no reason to ration them
+    # behind the budget that exists to limit network and token spend. Run them
+    # over the WHOLE corpus, and merge into the verdicts we already have.
+    #
+    # This also fixes a real regression: when the corpus grew from a 156-record
+    # sample to all 816, triage stopped selecting the records carrying the
+    # structural defects, and the most certain findings we have vanished from
+    # the queue entirely.
+    checked = {v["resource_id"] for v in verdicts}
+    structural = 0
+    for r in records:
+        if r.get("status") != "approved":
+            continue
+        f = verify.check_phone_format(r)
+        if not f:
+            continue
+        structural += 1
+        if r.get("id") in checked:
+            # Already verified against its source - attach, preferring the
+            # structural row since it cannot be a scraping false positive.
+            for v in verdicts:
+                if v["resource_id"] == r.get("id"):
+                    v["fields"] = [f] + [x for x in v.get("fields") or []]
+                    v["verdict"] = "discrepancy"
+                    v["reason"] = f["stored"]
+                    v["confidence"] = max(v.get("confidence", 0), 0.95)
+                    v["change_request"] = verify.build_change_request(r, [f], "discrepancy")
+                    break
+            continue
+        verdicts.append({
+            "resource_id": r.get("id"), "name": r.get("name", ""),
+            "verdict": "discrepancy", "reason": f["stored"], "confidence": 0.95,
+            "fetched": [], "fields": [f],
+            "listing_url": verify.listing_url(r.get("id")),
+            "listing_edit_url": verify.edit_url(r),
+            "org_website": r.get("website"),
+            "change_request": verify.build_change_request(r, [f], "discrepancy"),
+        })
+    print(f"  structural: {structural} listing(s) with a defect provable from "
+          f"the stored value alone (whole corpus, no model)")
+
     queue, abstained = [], []
     for v in verdicts:
         node = f"org:{v['resource_id']}"
