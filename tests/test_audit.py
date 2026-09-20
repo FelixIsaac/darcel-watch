@@ -185,3 +185,76 @@ def test_robots_denied_is_honoured(monkeypatch):
     a = audit.audit_org({"id": 1, "name": "X", "website": "https://x.test/",
                          "phones": [{"number": "510-555-0100"}]})
     assert a.findings == [] and "robots.txt" in a.note
+
+
+# --------------------------------------------------------------------------
+# site identity - the precondition on every other verdict
+# --------------------------------------------------------------------------
+
+def test_identity_anchors_exclude_the_organisation_name():
+    """A domain unrelated to the org's name is normal and must not be a signal.
+    Meals on Wheels at feedingseniors.org is not suspicious."""
+    rec = {"id": 1, "name": "Meals on Wheels",
+           "phones": [{"number": "(510) 555-0100"}],
+           "addresses": [{"address_1": "123 Main Street", "city": "Oakland",
+                          "postal_code": "94612"}]}
+    kinds = {k for k, _ in audit.identity_anchors(rec)}
+    assert kinds == {"phone", "street", "city", "postal_code"}
+    assert "name" not in kinds
+
+
+def test_page_belongs_accepts_a_matching_phone_in_any_format():
+    rec = {"id": 1, "phones": [{"number": "(510) 587-2999"}]}
+    ok, why = audit.page_belongs(rec, {"u": "call us on 510.587.2999 today"})
+    assert ok and "phone" in why
+
+
+def test_page_belongs_rejects_a_site_with_nothing_in_common():
+    """REGRESSION: listing 2035, "Getting Out & Staying Out", stores SF
+    addresses and SF phone numbers with a website of gosonyc.org - GOSO, an
+    East Harlem organisation in New York with a similar name. The pipeline
+    reported the SF phone number as CONTRADICTED, because a New York page does
+    list different numbers. The phone is probably fine; the website is wrong.
+
+    Without this precondition the tool produces a confident, specific, false
+    accusation against a named nonprofit."""
+    rec = {"id": 2035, "name": "Getting Out & Staying Out",
+           "phones": [{"number": "(415) 489-7300"}],
+           "addresses": [{"address_1": "1485 Bayshore Boulevard",
+                          "city": "San Francisco", "postal_code": "94124"}]}
+    ny_page = ("GOSO East Harlem New York. Call 212-831-5020. "
+               "Our programs serve justice-involved young people in NYC.")
+    ok, why = audit.page_belongs(rec, {"https://www.gosonyc.org/": ny_page})
+    assert not ok and why is None
+
+
+def test_page_belongs_prefers_the_strongest_anchor():
+    """A city is far weaker evidence of identity than a phone number - every
+    nonprofit page in this corpus says "San Francisco". The reported anchor
+    must name the strongest match so a reviewer can judge how thin it is."""
+    rec = {"id": 1, "phones": [{"number": "(415) 555-0100"}],
+           "addresses": [{"address_1": "1 Main Street", "city": "San Francisco",
+                          "postal_code": "94103"}]}
+    ok, why = audit.page_belongs(rec, {"u": "We serve San Francisco. 415-555-0100."})
+    assert ok and why.startswith("phone")
+
+
+def test_page_belongs_with_no_anchors_does_not_block():
+    """A listing with no phone and no address gives us nothing to check with.
+    That is not evidence the website is wrong, so it must not block."""
+    ok, _ = audit.page_belongs({"id": 1}, {"u": "anything at all"})
+    assert ok
+
+
+def test_findings_are_deduplicated_by_value():
+    """Extraction and the templates both produce a claim about the same stored
+    number, which double-counted contradictions 6 where there were 3."""
+    a = audit.OrgAudit(1, "X", "https://x.test", {}, [], {
+        "phone0": {"field": "phone", "stored": "(415) 223-1416",
+                   "label": "contradicted", "contradict": 1.0},
+        "xc7": {"field": "phone", "stored": "(415) 223-1416",
+                "label": "contradicted", "contradict": 1.0},
+        "addr0": {"field": "address", "stored": "1185 Mission Street",
+                  "label": "contradicted", "contradict": 1.0},
+    }, jev.Usage())
+    assert len(a.findings) == 2

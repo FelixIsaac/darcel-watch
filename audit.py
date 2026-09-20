@@ -250,7 +250,100 @@ def select_pages(inv: discover.Inventory, claims: list[Claim],
 
 
 # --------------------------------------------------------------------------
-# 3. reconcile
+# 3. identity - does this website even belong to this listing?
+# --------------------------------------------------------------------------
+
+_DIGITS_RE = __import__("re").compile(r"\D")
+
+
+def _digits(s: str) -> str:
+    return _DIGITS_RE.sub("", s or "")
+
+
+def identity_anchors(record) -> list[tuple[str, str]]:
+    """Facts that would prove a page belongs to this listing.
+
+    Address and phone only - deliberately NOT the organisation's name. Plenty
+    of legitimate nonprofits run a domain unrelated to what they are called,
+    and name-to-domain similarity would flag every one of them. A street, a ZIP
+    or a working number is a fact about the body; a domain name is branding.
+    """
+    out: list[tuple[str, str]] = []
+    for p in record.get("phones") or []:
+        d = _digits(p.get("number"))
+        if len(d) >= 10:
+            out.append(("phone", d[-10:]))
+    for a in record.get("addresses") or []:
+        z = (a.get("postal_code") or "").strip()
+        if len(z) >= 5:
+            out.append(("postal_code", z[:5]))
+        head = " ".join((a.get("address_1") or "").strip().split()[:2])
+        if len(head) >= 6:
+            out.append(("street", head))
+        city = (a.get("city") or "").strip()
+        if len(city) >= 4:
+            out.append(("city", city))
+    return out
+
+
+def page_belongs(record, pages: dict[str, str]) -> tuple[bool, str | None]:
+    """Does ANY fetched page carry a fact from this listing? -> (ok, evidence)
+
+    THE PRECONDITION THIS PROJECT LEARNED THE HARD WAY.
+
+    Every claim-level verdict rests on an unexamined assumption: that the
+    `website` field actually points at this organisation. When it does not,
+    every claim is judged against a stranger's site, everything looks
+    contradicted, and the tool produces a confident, specific, WRONG accusation.
+
+    That is not hypothetical. Listing 2035, "Getting Out & Staying Out", stores
+    San Francisco addresses (1485 Bayshore Blvd) and San Francisco phone
+    numbers (415-489-7300), and a website of gosonyc.org - which is GOSO, an
+    East Harlem organisation in New York with a similar name and no San
+    Francisco presence at all. The pipeline dutifully reported the SF phone
+    number as contradicted, because a New York page does indeed list different
+    numbers. The phone is probably fine. The WEBSITE is wrong.
+
+    So site identity is a precondition, not a claim. If no anchor appears
+    anywhere, we say so about the website and abstain on everything else,
+    because the only honest reading is "we cannot see this organisation from
+    here".
+
+    Note the asymmetry that keeps this safe: finding one anchor is enough to
+    proceed, and finding none never asserts that a value is wrong - it only
+    withdraws our standing to judge.
+    """
+    anchors = identity_anchors(record)
+    if not anchors:
+        return True, None          # nothing to check with; proceed as before
+
+    # Strength order matters. A phone number or a street line is a fact about
+    # THIS body. A city is not - every nonprofit page in this corpus says "San
+    # Francisco", and accepting that as proof of identity would wave through
+    # exactly the case this function exists to catch. City and postal code are
+    # kept only as last-resort anchors, and the kind is reported so a reviewer
+    # can see how thin the evidence was.
+    strength = {"phone": 0, "street": 1, "postal_code": 2, "city": 3}
+    best: tuple[int, str] | None = None
+    for url, text in pages.items():
+        low = text.lower()
+        digits = _digits(text)
+        for kind, value in sorted(anchors, key=lambda a: strength[a[0]]):
+            hit = (value in digits) if kind == "phone" else (value.lower() in low)
+            if not hit:
+                continue
+            rank = strength[kind]
+            if best is None or rank < best[0]:
+                best = (rank, f"{kind} {value!r} on {url}")
+            if rank == 0:
+                return True, best[1]      # a matching phone settles it
+    if best is None:
+        return False, None
+    return True, best[1]
+
+
+# --------------------------------------------------------------------------
+# 4. reconcile
 # --------------------------------------------------------------------------
 
 def reconcile(per_page: list[dict[str, jev.Verdict]]) -> dict[str, jev.Verdict]:
@@ -292,11 +385,27 @@ class OrgAudit:
     verdicts: dict
     usage: jev.Usage
     note: str = ""
+    website_suspect: bool = False
 
     @property
     def findings(self) -> list[dict]:
-        """Only active contradictions. Silence is never a finding."""
-        return [v for v in self.verdicts.values() if v["label"] == "contradicted"]
+        """Only active contradictions, deduplicated. Silence is never a finding.
+
+        Deduplication matters: extraction and the templates both produce a
+        claim about the same stored phone number, so an undeduplicated count
+        reported 6 findings where there were 3 distinct problems. A review
+        queue that double-counts trains people to distrust it.
+        """
+        seen, out = set(), []
+        for v in self.verdicts.values():
+            if v["label"] != "contradicted":
+                continue
+            k = (v["field"], (v.get("stored") or "").strip().lower())
+            if k in seen:
+                continue
+            seen.add(k)
+            out.append(v)
+        return out
 
     @property
     def confirmations(self) -> list[dict]:
@@ -314,6 +423,7 @@ class OrgAudit:
             "findings": self.findings,
             "confirmations": len(self.confirmations),
             "note": self.note,
+            "website_suspect": self.website_suspect,
             "cost_usd": round(self.usage.usd, 6),
             "ms": self.usage.ms,
         }
@@ -349,10 +459,12 @@ def audit_org(record) -> OrgAudit:
 
     per_page: list[dict[str, jev.Verdict]] = []
     fetched: list[dict] = []
+    texts: dict[str, str] = {}
     for url, lastmod in targets:
         text, method = page_text(url)
         if len(text) < 200:          # a shell, an error page, or a dead host
             continue
+        texts[url] = text
         fetched.append({"url": url, "via": method, "lastmod": lastmod})
         try:
             verdicts, u = jev.judge_page(text, claim_map, url=url, lastmod=lastmod)
@@ -365,6 +477,18 @@ def audit_org(record) -> OrgAudit:
 
     if not per_page:
         return empty("no readable pages - site may be JavaScript-rendered")
+
+    # PRECONDITION, checked before any verdict is allowed out. If nothing on
+    # the site matches anything in the listing, the website field is the
+    # suspect - not the phone number, not the address. Report that and stop.
+    ok, anchor = page_belongs(record, texts)
+    if not ok:
+        a = OrgAudit(rid, name, website, inv.as_dict(), fetched, {}, usage,
+                     "no fact from this listing appears anywhere on the linked "
+                     "site - the WEBSITE is the likely error, so every other "
+                     "claim is withheld")
+        a.website_suspect = True
+        return a
 
     best = reconcile(per_page)
     by_key = {c.key: c for c in claims}
