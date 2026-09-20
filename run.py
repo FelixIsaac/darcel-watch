@@ -147,7 +147,10 @@ def main():
     api_key = os.environ.get("OPENROUTER_API_KEY") or os.environ.get("GEMINI_API_KEY")
 
     print("harvesting (read-only, cached)...")
-    records = harvest.harvest(int(os.environ.get("N", 200)))
+    # N=0 means the whole curation dataset (816 resources). The old default of 200
+    # existed because v1 had no work list and we sampled random ids; v2 hands us
+    # ShelterTech's own list, so there is nothing to sample.
+    records = harvest.harvest(int(os.environ.get("N", 0)))
     try:
         corpus = harvest.corpus_size()
     except Exception:
@@ -227,7 +230,7 @@ def main():
         "queue": queue,
         "abstained": abstained,
         "contradictions": GQ.contradictions(g)[:15],
-        "source": "https://askdarcel.org/api (public, read-only)",
+        "source": "https://www.sfserviceguide.org/api/v2 (public, read-only)",
     }
     (OUT / "results.json").write_text(json.dumps(payload, indent=1))
 

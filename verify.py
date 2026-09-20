@@ -1,8 +1,10 @@
-"""Re-verify SF Service Guide (AskDarcel) listings against the org's live website.
+"""Re-verify SF Service Guide listings against the org's live website.
+
+Reads the v2 API's records (see harvest.py for why v2 and not askdarcel.org/api).
 
 Read-only, agentic. Deterministic evidence gathering + an explicit "where do I
 look next" decision loop, with an optional Gemini adjudication layer. We never
-write to AskDarcel - change_request payloads are emitted, never POSTed.
+write to the Service Guide - change_request payloads are emitted, never POSTed.
 """
 
 import concurrent.futures as cf
@@ -14,8 +16,9 @@ import re
 import urllib.error
 import urllib.request
 
-DATA = pathlib.Path(__file__).parent / "data"
-UA = {"User-Agent": "sfsg-watch/0.1 (Hack for Humanity SF; read-only)"}
+DATA = pathlib.Path(__file__).parent / "data_v2"
+UA = {"User-Agent": "sfsg-watch/0.2 (Hack for Humanity SF; read-only)"}
+API = os.environ.get("SFSG_API", "https://www.sfserviceguide.org/api/v2")
 FETCH_TIMEOUT = 12
 MAX_FETCHES = 3
 # Sub-pages the agent tries, in order, when the homepage doesn't settle a question.
@@ -28,6 +31,21 @@ CLOSURE_RE = re.compile(
 )
 PHONE_RE = re.compile(r"\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}")
 TAG_RE = re.compile(r"<(script|style)[^>]*>.*?</\1>", re.S | re.I)
+OPEN_TAG_RE = re.compile(r"<(script|style)[^>]*>.*$", re.S | re.I)
+# Serialized config that survived tag-stripping: quoted keys, braces, dotted
+# identifiers. Prose about a closure does not look like this.
+CODE_RE = re.compile(r'":\s*"|\{"|":\[|\w+\.\w+\.\w+|=>|function\s*\(')
+# Phrases that can only be about the subject of the page.
+STRONG_CLOSURE_RE = re.compile(
+    r"permanently closed|out of business|no longer offering|temporarily closed", re.I
+)
+# Who the sentence is about. "has closed" and "relocated" are only evidence when
+# the organisation is the subject.
+SUBJECT_RE = re.compile(
+    r"\b(we|our|us)\b|\bthis (location|office|site|program|programme|center|centre|"
+    r"clinic|pantry|shelter|branch|facility)\b",
+    re.I,
+)
 STRIP_RE = re.compile(r"<[^>]+>")
 WS_RE = re.compile(r"\s+")
 
@@ -113,15 +131,44 @@ def listing_edit_url(rid):
     return f"{SERVICE_GUIDE}/organizations/{rid}/edit" if rid else None
 
 
+def edit_url(record):
+    """Prefer the curation dataset's own edit link when harvest attached one.
+
+    (In practice it is always /organizations/<resource_id>/edit, i.e. identical to
+    what we construct - but taking theirs means we follow if they ever move it.)
+    """
+    return record.get("service_edit_url") or listing_edit_url(record.get("id"))
+
+
+EXT_RE = re.compile(r"(?i)\b(?:ext\.?|extension|x)\b.*$")
+
+
+def phone_digits(p):
+    """Digits of the dialable part, with any trailing extension dropped.
+
+    v2 renders extensions inline - "(510) 654-4000 ext. 105" - so naively
+    stripping non-digits yields 5106544000105 and taking the last 10 gives
+    6544000105, a number that belongs to nobody. Cut at the ext marker first.
+    """
+    return re.sub(r"\D+", "", EXT_RE.sub("", p or ""))
+
+
 def norm_phone(p):
     """Last 10 digits - area code + number, ignores formatting/country code."""
-    d = re.sub(r"\D+", "", p or "")
+    d = phone_digits(p)
     return d[-10:] if len(d) >= 10 else None
 
 
 def text_from_html(raw):
     """Strip scripts/styles/tags to plain text. Crude but stdlib-only."""
     no_script = TAG_RE.sub(" ", raw)
+    # fetch() caps the body at 500KB, which on a big Wix/SPA page lands in the
+    # middle of a <script>. TAG_RE only matches balanced pairs, so that final
+    # unclosed block survives and its JS config dumps into the "text" - which is
+    # how we once reported Temple United Methodist Church as relocated on the
+    # strength of "specs.events.ui.RelocatedPagesModal":"true". Drop any opener
+    # with no closer.
+    no_script = OPEN_TAG_RE.sub(" ", no_script)
     no_tags = STRIP_RE.sub(" ", no_script)
     return WS_RE.sub(" ", html.unescape(no_tags)).strip()
 
@@ -185,19 +232,20 @@ def check_phone(record, texts):
         raw = p.get("number")
         n = norm_phone(raw)
         if n:
-            stored_all.append((raw, n, p.get("service_type") or ""))
+            stored_all.append((raw, n, p.get("service_type") or "", p.get("id")))
     if not stored_all:
         return None
 
-    stored_norms = {n for _, n, _ in stored_all}
+    stored_norms = {n for _, n, _, _ in stored_all}
 
     for url, t in texts.items():
         for m in PHONE_RE.finditer(t):
             live_norm = norm_phone(m.group())
             if live_norm and live_norm in stored_norms:
-                raw = next(r for r, n, _ in stored_all if n == live_norm)
+                raw, _, _, pid = next(s for s in stored_all if s[1] == live_norm)
                 return {"field": "phone", "stored": raw, "live": m.group(),
-                        "evidence_url": url, "evidence_quote": m.group(), "match": True}
+                        "evidence_url": url, "evidence_quote": m.group(),
+                        "match": True, "phone_id": pid}
 
     # Nothing on the site matched ANY stored number.
     #
@@ -218,53 +266,111 @@ def check_phone(record, texts):
                     "stored_count": len(stored_all), "addition": True}
         return {"field": "phone", "stored": stored_all[0][0], "live": m.group(),
                 "evidence_url": url, "evidence_quote": snippet(t, m),
-                "match": False, "stored_count": 1}
+                "match": False, "stored_count": 1, "phone_id": stored_all[0][3]}
     return None
 
 
 def check_phone_format(record):
     """Stored numbers that cannot be dialled as written.
 
-    Purely structural - no model, no network, no false positives from page
-    scraping. A US number normalises to 10 digits (or 11 with a leading 1).
-    Anything else is either truncated or has an extension concatenated onto it,
-    and in both cases someone typing it into a phone gets nowhere.
+    Deliberately narrow. An earlier, looser version of this check flagged
+    anything whose digits didn't come to 10 or 11, and produced a wave of
+    findings that were all artifacts: we were reading the v1 API, whose phone
+    formatter mangles US numbers, and on top of that the rule fired on every
+    legitimate short code in the corpus. Re-run against v2, "not 10 or 11
+    digits" catches 14 numbers in 816 listings and 12 of them are fine -
+    311 (SF city services), 711 (TTY relay), 838255 and 9881 (crisis-line text
+    and dial-then-option codes), and three inline "ext. NNN" suffixes.
+
+    So the rule is now only the three shapes that are unambiguously broken and
+    that a volunteer can actually fix:
+
+      1. too many digits - two numbers, or a number and a ZIP, typed into one
+         field (phone 4777: "41574423832383");
+      2. an empty number field, sometimes with the real number sitting in the
+         service_type label instead (phone 4392: number None, label
+         "(415) 333-3017") - the listing shows a contact row with no contact;
+      3. a non-US country_code on a San Francisco listing, which means the
+         number was parsed as a foreign one and is rendered - and dialled -
+         wrong (phone 2149: SF311's TTY line stored as Swiss "057 012 31 17"
+         when the same record carries the correct (415) 701-2311).
+
+    Short numbers are no longer flagged at all: below 10 digits we cannot tell
+    a truncated number from a real short code, and guessing wrong wastes the
+    volunteer we are trying to help.
     """
     bad = []
     for p in record.get("phones") or []:
         raw = (p.get("number") or "").strip()
-        digits = re.sub(r"\D", "", raw)
-        if not digits:
+        label = (p.get("service_type") or "").strip()
+        cc = p.get("country_code")
+
+        if not raw:
+            recovered = PHONE_RE.search(label)
+            why = "no number stored"
+            if recovered:
+                why += f" - but the label reads {recovered.group()!r}, typed into the wrong field"
+            bad.append({"phone_id": p.get("id"), "raw": raw or "(empty)",
+                        "label": label or "unlabelled", "why": why,
+                        "proposed": recovered.group() if recovered else None})
             continue
-        if len(digits) in (10, 11):
+
+        digits = phone_digits(raw)
+        if len(digits) > 11:
+            bad.append({"phone_id": p.get("id"), "raw": raw,
+                        "label": label or "unlabelled",
+                        "why": f"{len(digits)} digits - two values run into one field",
+                        "proposed": None})
             continue
-        label = p.get("service_type") or "unlabelled"
-        if len(digits) < 10:
-            why = f"only {len(digits)} digits - truncated"
-        else:
-            why = f"{len(digits)} digits - extension run into the number"
-        bad.append(f"{raw} ({label}): {why}")
+
+        if cc and cc != "US":
+            bad.append({"phone_id": p.get("id"), "raw": raw,
+                        "label": label or "unlabelled",
+                        "why": f"stored with country_code {cc} on a Bay Area listing - "
+                               "parsed as a foreign number, so it renders and dials wrong",
+                        "proposed": None})
+
     if not bad:
         return None
+    summary = "; ".join(f"{b['raw']} ({b['label']}): {b['why']}" for b in bad)
     return {
         "field": "phone_format",
-        "stored": "; ".join(bad),
+        "stored": summary,
         "live": "not dialable as stored",
         # The evidence is the stored value itself, so point at the listing.
         # Every finding carries a source; this one's source is the record.
         "evidence_url": listing_url(record.get("id")),
-        "evidence_quote": "; ".join(bad),
+        "evidence_quote": summary,
         "match": False,
         "structural": True,
+        "phone_id": bad[0]["phone_id"],
+        "phone_issues": bad,
     }
 
 
 def check_closure(texts):
+    """A closure claim has to come from prose a person could read on the page.
+
+    Defence in depth behind text_from_html: any match whose surroundings look
+    like serialized config rather than a sentence is discarded, not reported.
+    Telling a volunteer a church has relocated on the evidence of a feature-flag
+    name is worse than finding nothing.
+    """
     for url, t in texts.items():
-        m = CLOSURE_RE.search(t)
-        if m:
+        for m in CLOSURE_RE.finditer(t):
+            quote = snippet(t, m)
+            if CODE_RE.search(quote):
+                continue
+            # "has closed" and "relocated" are ordinary English that appears in
+            # staff bios ("he relocated to New Orleans") and in news about other
+            # bodies ("San Francisco has closed the public spaces around..."),
+            # both of which we reported as closures before this guard. Weak
+            # phrases now need the organisation to be the subject; only the
+            # unambiguous banner phrases stand on their own.
+            if not STRONG_CLOSURE_RE.search(m.group()) and not SUBJECT_RE.search(quote):
+                continue
             return {"field": "operating_status", "stored": "open (approved)", "live": m.group(),
-                     "evidence_url": url, "evidence_quote": snippet(t, m), "match": False}
+                    "evidence_url": url, "evidence_quote": quote, "match": False}
     return None
 
 
@@ -384,6 +490,21 @@ def actionable(findings):
     return out
 
 
+PHONE_FIELDS = ("phone", "phone_format", "phone_missing")
+
+
+def change_request_endpoint(record, finding):
+    """The v2 route this payload WOULD go to, if a human chose to submit it.
+
+    Phone edits have their own resource in the Go API; everything else is a field
+    edit on the resource. Both confirmed migrated to Go in sheltertech-go's
+    docs/askdarcel-web-endpoint-migration-plan.md (rows 5 and 22).
+    """
+    if finding.get("field") in PHONE_FIELDS and finding.get("phone_id"):
+        return f"{API}/phones/{finding['phone_id']}/change_requests"
+    return f"{API}/resources/{record.get('id')}/change_requests"
+
+
 def build_change_request(record, findings, verdict):
     if verdict != "discrepancy":
         return None
@@ -391,19 +512,33 @@ def build_change_request(record, findings, verdict):
     bad = next((f for f in usable if f.get("match") is False), usable[0] if usable else None)
     if not bad:
         return None
+    # A phone_format finding may already know the corrected value (the number was
+    # typed into the label field); prefer that over the placeholder "live" text.
+    proposed = bad["live"]
+    for issue in bad.get("phone_issues") or []:
+        if issue.get("proposed"):
+            proposed = issue["proposed"]
+            break
     return {
         "resource_id": record.get("id"),
+        "phone_id": bad.get("phone_id"),
         "field": bad["field"],
         "listing_url": listing_url(record.get("id")),
-        "listing_edit_url": listing_edit_url(record.get("id")),
+        # The curation dataset hands us the exact page a volunteer fixes this on.
+        "listing_edit_url": edit_url(record),
+        "endpoint": change_request_endpoint(record, bad),
+        "method": "POST",
         "current": bad["stored"],
-        "proposed": bad["live"],
+        "proposed": proposed,
         "source_url": bad["evidence_url"],
         "source_quote": bad["evidence_quote"],
         "submitted_by": "darcel-watch (agent, human review required)",
+        "posted": False,
     }
-    # NOTE: this is emitted only. We never POST to /resources/:id/change_requests -
-    # a human reviews and submits it themselves.
+    # NOTE: EMITTED ONLY. We never POST to /api/v2/resources/:id/change_requests
+    # or /api/v2/phones/:id/change_requests. "endpoint" records where a payload
+    # would go so a human can check our work; this process is read-only and
+    # issues no write request of any kind. A human reviews and submits it.
 
 
 def verify(record, api_key=None):
@@ -467,7 +602,7 @@ def verify(record, api_key=None):
         # Both sides of the comparison, so a reviewer can see what they are
         # about to change as well as the evidence for changing it.
         "listing_url": listing_url(rid),
-        "listing_edit_url": listing_edit_url(rid),
+        "listing_edit_url": edit_url(record),
         "org_website": website,
         "confidence": confidence, "fetched": fetched,
         "fields": [{k: v for k, v in f.items() if k != "match"} for f in shown],

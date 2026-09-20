@@ -1,4 +1,5 @@
 data/
+data_v2/
 out/*.json
 __pycache__/
 node_modules/
