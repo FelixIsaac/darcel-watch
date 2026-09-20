@@ -266,6 +266,56 @@ CI deliberately excludes anything touching a live nonprofit's site, a paid model
 FalkorDB. A pipeline that goes red for reasons nobody controls teaches people to
 ignore it.
 
+## Layer audit
+
+Every layer, and whether it is principled or a leftover heuristic. The test
+applied to each: **does this decide something by asking, or by guessing?**
+
+A heuristic is not automatically wrong — a cheap deterministic prefilter is the
+right tool for narrowing 265 pages to 40. It becomes wrong when it is making the
+*decision* rather than narrowing the field for one.
+
+| Layer | Basis | Verdict |
+|---|---|---|
+| `harvest.py` — ingest | v2 API, read-only, cached | **Sound.** Correct API verified against what the live site consumes. |
+| Structural checks | regex over stored values | **Sound, and regex is right here.** Only flags shapes that are provably malformed. Cannot false-positive. |
+| `extract.py` — claims | Gemini reads the whole listing, cached on `updated_at` | **Sound.** Was templates over 3 fields (~10% of the data). |
+| `discover.py` — inventory | `robots.txt` → sitemap → `lastmod` | **Sound.** Measured: 81% coverage. Was 5 guessed slugs. |
+| Page shortlist | slug keywords → top 40 | **Sound as a prefilter.** Narrows; does not decide. |
+| Page selection | Jev `Choice` over shortlisted slugs | **Sound.** Was keyword scoring making the decision. +9% evidence at equal budget. |
+| `fetcher.py` | direct GET → rendering reader | **Sound.** Without the fallback, blind on 1 in 3 sites. |
+| `jev.py` — judgment | three-way `Choice`, structured criteria | **Sound, and chosen by measurement** (`experiment.py`), not taste. |
+| Thresholds | calibrated, held out, plateau midpoint | **Sound.** precision 1.000 / recall 0.867. |
+| `reconcile` | support beats silence | **Sound.** Encodes the Building Futures lesson; locked by test. |
+| `graph.py` — contradictions | shared phone/address | **Partly.** Mostly legitimate co-location (The Women's Building). Valid as a blast-radius input, **not** as a finding source. Documented as such. |
+| `freshness.py` — constants | **judgement, never fitted** | ⚠️ **Weakest layer.** See below. |
+| Schedule checks | one-off script, never shipped | ⚠️ **Gap.** 75 rows across 15 orgs close before they open. Free and certain — it should be a module. |
+| `agent.py` | 899 lines, off by default (`AGENT=1`) | ⚠️ **Unresolved.** Either wire it in or delete it; dead code in a public repo is a claim you are not making good on. |
+| `notify/spectrum.ts` | iMessage does not deliver | ⚠️ Provisioning, not code. Stated plainly. |
+
+### The freshness constants are the weakest thing here
+
+```python
+HALF_LIFE = {"phone": 1095, "address": 1095, "schedule": 180, ...}
+WEIGHT    = {"phone": 0.25, "address": 0.20, "schedule": 0.25, ...}
+```
+
+These are numbers chosen by judgement and never fitted to anything. That is now
+conspicuous, because every other layer's constants are measured.
+
+The honest constraint: fitting half-lives properly needs **per-field** change
+history, and the API exposes only record-level `updated_at`. We cannot see that a
+phone number changed while an address did not.
+
+But `discover.py` now gives a signal that was not available before —
+**sitemap `lastmod` per page**. How often an organisation's contact page changes
+is an observable proxy for how often its contact details change. That is a real
+path to fitting `HALF_LIFE["phone"]` from data rather than taste, and it does not
+depend on ShelterTech giving us anything.
+
+Until then the constants stay labelled as judgement everywhere they appear, and
+any volunteer-hours figure derived from them is an estimate resting on an estimate.
+
 ## Known weaknesses
 
 - **Calibration measures faithfulness, not factuality.** The oracle asks whether
