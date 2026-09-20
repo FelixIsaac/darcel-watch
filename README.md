@@ -4,25 +4,52 @@ Named for Darcel Jackson, who founded ShelterTech after being injured as a welde
 
 Built at Hack for Humanity: San Francisco, 19 Sep 2026 (Entrepreneurs First, co-hosted by MLH, powered by Google Gemini). Built at a hackathon.
 
+> **[`FACTS.md`](FACTS.md) is the single source of truth for every number in this repo** — what was measured, how, and what we got wrong. Six claims have been retracted from this project so far. If a number appears here and not there, it is a bug in this README. See [What we got wrong](#what-we-got-wrong) below.
+
 ## What it is
 
-We set out to build an AI resource finder for San Franciscans needing food, shelter, healthcare, legal aid. We searched first. It already exists: ShelterTech's [SF Service Guide](https://sfserviceguide.org) — 1,759 organisations, 7,577 services, ~16,000 monthly users, open source ([github.com/ShelterTechSF](https://github.com/ShelterTechSF)), with a chatbot (`casey`) and a phone line (`VACS-MVP`). Building a 16th directory would have been vanity.
+We set out to build an AI resource finder for San Franciscans needing food, shelter, healthcare, legal aid. We searched first. It already exists: ShelterTech's [SF Service Guide](https://sfserviceguide.org) — 1,759 organisations and 7,577 services counted from their live API, open source ([github.com/ShelterTechSF](https://github.com/ShelterTechSF)), with a chatbot (`casey`) and a phone line (`VACS-MVP`). ShelterTech report 16,000+ monthly users. Building another directory would have been vanity.
 
-So we asked what's actually broken. Their listings are vetted by volunteers at monthly datathons — human hours they don't have enough of. We measured the effect of that, live, during the hackathon, against their own API.
+So we asked what's actually broken. **Every number below is in [`FACTS.md`](FACTS.md), with how it was established. If a claim isn't there, we don't make it.**
 
 ## The measured baseline
 
 Full corpus, not a sample: **813 approved organisations** in the live SF Service Guide.
 
+**The directory is actively maintained.** 808 of those 813 listings were updated within the last 90 days — July 2026: 568 listings, August: 204, September: 36 — and they land in bursts on particular days rather than a trickle, the shape you'd expect from datathon sessions. Whatever is wrong here, it is not that nobody is doing the work.
+
+What is missing is **provenance**.
+
 | Metric | Count |
 |---|---|
 | Approved organisations | 813 |
-| Never verified or certified by anyone | 598 (73.6%) |
-| Verified or certified at some point | 215 |
-| Median age of those 215 confirmations | ~7.7 years |
-| Confirmed within the last 3 years | 8 |
+| Updated within 90 days | 808 (median 53 days) |
+| **No verification signal at all** — no `verified_at`, no `certified_at`, no `certified` flag | **523 (64.3%)** |
+| Listings with a `verified_at` date | 144, newest **2022-10-12** |
+| Listings with a `certified_at` date | 124, newest 2026-09-15 (9 in 2026) |
 
-The gap in this directory is not discovery. It's freshness. A wrong shelter address at 9pm is worse than no answer.
+`updated_at` records *that something changed*. It cannot distinguish a careful confirmation against the organisation's own website from a typo fix. The field that would carry that distinction — `verified_at` — stopped being written around 2022. `certified_at` is still written, but rarely.
+
+So the honest problem is not "nobody checks." It's that **there is no machine-readable record of what was checked, so nobody — including ShelterTech — can tell a freshly confirmed listing from a stale one.** That is what the freshness index below is for, and why it scores the directory at 36.2: almost nothing carries evidence stronger than "well-formed".
+
+The gap in this directory is not discovery. It's provenance. A wrong shelter address at 9pm is worse than no answer.
+
+## What we got wrong
+
+Six claims have been retracted from this project. The pattern was the same every time: a number that was real, attached to an interpretation that was not. Full detail and provenance in [`FACTS.md`](FACTS.md) section E.
+
+| Retracted claim | Why it died |
+|---|---|
+| "24 of 189 phone numbers are undialable (13%)" | An artifact of reading the v1 API, which mangles US area codes into international dialling codes. 21 of 23 vanish on v2. |
+| "An addiction treatment helpline can't be called" | The live page dials it correctly. |
+| "`5106544000105` should be `510.777.9560`" (Meals on Wheels) | We compared only the first of ten stored numbers. The main line was two rows below. |
+| "47 duplicate listings" | Same name + same address are usually distinct programme listings, not duplicates. |
+| "Website-identity check finds N broken listings" | The count measured our crawl depth, not their data — 53 findings became 18 as the crawler improved. |
+| **"73.6% have never been verified" + "volunteers at monthly datathons, more work than hours available"** | **Two errors in one sentence.** `verified_at` was abandoned around 2022, so measuring it and calling the result "never verified" conflates a dead field with neglect. And the directory is actively maintained — 808 of 813 listings updated within 90 days. The defensible number is 523 (64.3%) carrying no verification signal at all; 73.6% excluded 75 listings that carry a `certified` flag without a date. Datathons are biweekly, not monthly, per ShelterTech's help centre — though that article is dated 5 November 2019, so we don't assert today's cadence either. |
+
+That last one was this project's founding premise. It was wrong, and correcting it made the claim smaller and the project more honest: the issue is missing provenance, not missing effort.
+
+One further note, since it has already happened: a search engine now returns this repo as a "third-party source corroborating" ShelterTech's 16,000-monthly-users figure. It is not. We cited them. Nobody should cite us back for it.
 
 ## What it found
 
@@ -56,7 +83,7 @@ Lead example: **Building Futures**, a domestic violence services organisation, h
 
 ### The live run: structural checks carry the confident findings, the model mostly abstains
 
-At `BUDGET=25` against the full v2-sourced corpus, the current run produces 33 checked listings: **8 discrepancies (all structural, the phone defects above), 9 abstained, 16 matched.** Every model-adjudicated finding in this run came back **abstain or match** — none of the discrepancies in this run came from the model's judgment alone. One abstention: the regex evidence-gatherer found what looked like a phone number on an org's page (Grassroots Open Assistive Tech) but it was actually a Zoom meeting ID — the model declined to treat it as a phone match or mismatch.
+At `BUDGET=25` against the full v2-sourced corpus, the current run produces 33 checked listings: **8 discrepancies (all structural, the phone defects above), 4 abstained, 21 matched.** The abstain/match split moves between runs — the model is not deterministic — so treat those two as a snapshot and re-run to check. Every model-adjudicated finding in this run came back **abstain or match** — none of the discrepancies in this run came from the model's judgment alone. One abstention: the regex evidence-gatherer found what looked like a phone number on an org's page (Grassroots Open Assistive Tech) but it was actually a Zoom meeting ID — the model declined to treat it as a phone match or mismatch.
 
 We're stating this plainly because it's the designed outcome, not a limitation: we tightened the adjudication prompt twice specifically to make it more conservative, and it got more conservative. The cheap structural check now carries every confident finding in this run. The model's job is judgment on genuinely ambiguous scraped evidence, and abstaining there is it doing that job correctly.
 
@@ -78,7 +105,7 @@ Structural checks answer "is this value wrong right now." They can't answer the 
 
 `freshness.py` treats staleness as **expiry, not error**. Every field carries an implicit shelf life — a phone number stays believable for years, opening hours for months — and a score decays from whatever evidence last supported it:
 
-- **Half-life per field**: schedule 180 days, phone/address 1,095 days (3 years), website/email 730 days (2 years).
+- **Half-life per field**: schedule 180 days, phone/address 1,095 days (3 years), website/email 730 days (2 years). **These are our judgement, not measurements** — never fitted to data. The right method is to mine ShelterTech's change-request history for how often each field actually changes. The same caveat applies to the field weights and the evidence ceilings below.
 - **Evidence has a ceiling, not just an age.** `human_verified` can reach 100. `source_agreement` (the org's own site currently says the same thing) caps at 90. **`structural_ok` — well-formed, never confirmed — caps at 40, no matter how recently the record was touched.** This is the load-bearing idea: `(415) 555-0123` is a perfectly well-formed number for an organisation that closed in 2019. Being well-formed is not being current. Only the organisation's own source, or a human, resets the clock.
 - **Every listing gets one named next action** — the single cheapest thing that would raise its score the most. A list of 800 stale listings is a guilt trip. A list of 800 listings each with one action ("confirm phone against the org's own site") is a work plan.
 
@@ -87,11 +114,13 @@ Run against the full 813-listing corpus:
 | | |
 |---|---|
 | Median freshness | 36.2 / 100 |
-| Fresh (≥70) | 8 listings (1.0%) |
-| Stale (15–39) | 600 listings (73.8%) |
+| Fresh (≥70) | 12 listings (1.5%) |
+| Stale (15–39) | 596 listings (73.3%) |
 | Expired (<15) | 205 listings (25.2%) |
 
-**Cost to fix, not just a score to feel bad about:** moving the median from 36 to 70 is estimated at roughly 204 volunteer-hours of confirmation work. That's the number ShelterTech's current process — a monthly datathon — can't produce today, because nobody has scored the whole directory this way before.
+The band counts shift slightly between runs, because a "match" verdict from the agent counts as a confirmation and moves listings up. The median has held at 36.2.
+
+**A cost, not just a score to feel bad about:** the index estimates roughly 204 volunteer-hours of confirmation work to move the median from 36 to 70. **That is an estimate resting on an estimate** — it is arithmetic over the half-lives and weights above, which are themselves judgement calls. Treat it as sizing the problem, not scheduling it. Its value is that nobody has scored the whole directory this way before, so there was no figure of any kind to argue from.
 
 ### The method generalises beyond phones
 
@@ -156,7 +185,7 @@ npm run web    # http://localhost:8787 - Dashboard / Review / Graph / Freshness
 - **Evidence has a ceiling, not just an age.** A well-formed value that's never been confirmed can't out-score a value someone actually checked, no matter how fresh-looking it is. That's the whole point of the freshness index.
 - **Abstention is a headline metric, not a bug we hide.** In our live run, 9 of 33 checked listings abstained. That's reported, not smoothed over.
 - **Every claim carries a source.** A structural finding points at the listing itself — the stored value is the evidence. A model finding carries a source URL and a verbatim quote. No quote, no claim.
-- **We are not building a 16th directory.** ShelterTech's guide, chatbot, and phone line already exist and are used by ~16,000 people a month. This tool reduces the cost of keeping their existing system accurate; it doesn't replace it.
+- **We are not building another directory.** ShelterTech's guide, chatbot, and phone line already exist, are actively maintained, and — ShelterTech report — serve 16,000+ people a month. This tool adds a provenance signal their data doesn't currently carry; it doesn't replace anything and it isn't a criticism of their upkeep.
 
 ## Limitations
 
@@ -171,3 +200,5 @@ npm run web    # http://localhost:8787 - Dashboard / Review / Graph / Freshness
 ## Credits
 
 Built against [ShelterTech](https://sheltertech.org)'s [SF Service Guide](https://sfserviceguide.org) and its public API. Named for Darcel Jackson. This project only exists because ShelterTech already built and open-sourced the thing worth improving.
+
+ShelterTech maintain the guide with volunteers and paid community representatives — including people with lived experience of homelessness — on a programme budget they put at roughly $200,000 a year. Their help centre describes datathons every two weeks with a final review by the Homeless Advocacy Project; **that article is dated 5 November 2019, so we can't assert what the cadence is today.** Nothing in this repo is a claim that they aren't doing the work. They are. It is a claim that the data doesn't record what was checked, which is a different and much smaller problem.

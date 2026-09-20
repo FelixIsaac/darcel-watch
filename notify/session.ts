@@ -552,7 +552,8 @@ function appendOutcome(filePath: string, record: unknown): void {
  * A `confirm` produces a change_request. A `looks_right` produces a human
  * verification, which is a different artifact in a different file — it asserts
  * "a person checked this and it was fine", which for a directory where most
- * listings have never been verified is worth recording on its own.
+ * listings carry no machine-readable record of having been confirmed is worth
+ * recording on its own.
  */
 export function recordOutcome(
   item: ReviewItem,

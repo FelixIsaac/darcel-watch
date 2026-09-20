@@ -577,7 +577,7 @@
     <strong>What this is:</strong> an agent that re-checks every listing in the SF Service Guide — the directory unhoused San Franciscans use to find food, shelter, clinics and legal aid — against each organisation's own live website, and says so when the stored details are wrong.
     <span class="who"><strong>Who uses it:</strong> a ShelterTech volunteer, who reviews each finding and approves it by hand. The person it helps is someone looking for a meal tonight, who never sees this page. Nothing here is ever written to the live directory automatically.</span>
   </p>
-  <p class="source-note">Source: sfserviceguide.org (nonprofit ShelterTech) — 1,759 organisations, 7,577 services, roughly 16,000 people a month.</p>
+  <p class="source-note">Source: sfserviceguide.org (nonprofit ShelterTech) — 1,759 organisations and 7,577 services, counted from their live API. ShelterTech report 16,000+ monthly users.</p>
   <div class="badge-row" id="badge-row"></div>
 </header>
 
@@ -589,6 +589,7 @@
 
   <section id="stats-section">
     <h2>The state of the directory</h2>
+    <p class="framing">The directory is actively maintained — 808 of 813 approved listings were updated in the last 90 days. What is missing is <strong>provenance</strong>: <code>updated_at</code> records that something changed, not that anyone confirmed it against reality. The field that would carry that, <code>verified_at</code>, stopped being written around 2022; <code>certified_at</code> is still used but rarely. So nobody — including ShelterTech — can tell a freshly confirmed listing from a stale one. That is the gap this tool fills.</p>
     <div class="stat-grid" id="stat-grid"></div>
   </section>
 
@@ -620,9 +621,9 @@
   var DEMO_DATA = {
     corpus: { resources: 1759, services: 7577 },
     stats: {
-      sampled: 122, approved: 108, never_verified: 98,
-      median_verified_age_days: 2837, verified_last_year: 0,
-      checked: 122, discrepancies: 31, abstained: 14, matched: 77,
+      sampled: 816, approved: 813, no_verification_signal: 523,
+      median_updated_age_days: 53, updated_last_90d: 808,
+      checked: 33, discrepancies: 8, abstained: 4, matched: 21,
       gemini: false, graph_backend: "in-memory"
     },
     queue: [
@@ -691,8 +692,9 @@
 
   function fmtDays(days){
     if(typeof days !== "number" || isNaN(days)) return "—";
-    var years = (days/365.25);
-    return years.toFixed(1) + " yrs";
+    // Sub-year spans read as "53 days", not "0.1 yrs".
+    if(days < 365) return Math.round(days) + " days";
+    return (days/365.25).toFixed(1) + " yrs";
   }
 
   function el(tag, cls, html){
@@ -709,9 +711,9 @@
     var c = (data && data.corpus) || {};
 
     var tiles = [
-      { hero:true, value: num(s.never_verified) + " / " + num(s.approved), label: "live listings NEVER verified against source" },
-      { hero:true, value: fmtDays(s.median_verified_age_days), label: "median time since last verification" },
-      { hero:true, value: num(s.verified_last_year, 0), label: "listings verified in the past year" },
+      { hero:true, value: num(s.no_verification_signal) + " / " + num(s.approved), label: "live listings carrying no verification signal at all — no date, no flag" },
+      { hero:true, value: num(s.updated_last_90d) + " / " + num(s.approved), label: "listings updated in the last 90 days — the directory is actively maintained" },
+      { hero:true, value: fmtDays(s.median_updated_age_days), label: "median time since a listing was last updated" },
       { value: num(s.checked), label: "checked this run" },
       { value: num(s.discrepancies), label: "discrepancies found" },
       { value: num(s.abstained), label: "abstained (declined to judge)" },

@@ -4,32 +4,46 @@ Assume you know nothing about this project. This file tells you everything.
 
 Location: `~/Projects/darcel-watch` · Built 19 Sep 2026 at Hack for Humanity SF.
 
+**`FACTS.md` is the single source of truth for every number below.** If a figure
+appears here and not there, this file is wrong.
+
 ---
 
 ## 1. What problem this solves
 
 San Franciscans who need food, a shelter bed, a clinic or legal aid find those
 services through **SF Service Guide** (`sfserviceguide.org`), run by the nonprofit
-**ShelterTech**: 1,759 organisations, 7,577 services, ~16,000 users a month. It is
-open source, and it already has a chatbot (`casey`) and a phone line (`VACS`).
+**ShelterTech**: 1,759 organisations and 7,577 services, counted from their live
+API. ShelterTech report 16,000+ monthly users. It is open source, and it already
+has a chatbot (`casey`) and a phone line (`VACS`).
 
 We set out to build an AI resource finder. We searched for prior art first and
-found ShelterTech had built it twice already. A sixteenth directory would have
+found ShelterTech had built it twice already. Another directory would have
 been pointless, so we asked what is actually broken about the one that exists.
 
-Their listings are vetted by volunteers at monthly datathons — human hours they do
-not have enough of.
+**Not neglect.** The directory is actively maintained: 808 of 813 approved
+listings were updated in the last 90 days (July 2026: 568, August: 204,
+September: 36), landing in bursts consistent with datathon sessions.
+
+What is missing is **provenance**. `updated_at` records that something changed;
+it cannot distinguish a careful confirmation from a typo fix. The field that
+would carry that — `verified_at` — stopped being written around 2022.
+`certified_at` is still used, but rarely.
 
 **Measured against their live API:**
 
 | | |
 |---|---|
 | Approved organisations (live to users) | **813** |
-| Never verified *or* certified by anyone | **598 (73.6%)** |
-| The 215 that were verified — median age | **7.7 years** |
-| Verified within the last three years | **8** |
+| Updated within 90 days | **808** (median 53 days) |
+| **No verification signal at all** — no `verified_at`, no `certified_at`, no `certified` flag | **523 (64.3%)** |
+| Have a `verified_at` date | 144, newest **2022-10-12** |
+| Have a `certified_at` date | 124, newest 2026-09-15 (9 in 2026) |
 
-The gap is not discovery. It is **freshness**.
+So the honest problem is not "nobody checks". It is that **nobody — including
+ShelterTech — can tell a freshly confirmed listing from a stale one**, because
+nothing in the record says what was checked. That is what the freshness index
+is for.
 
 ---
 
@@ -40,8 +54,8 @@ Two things, which answer different questions.
 **"What is broken?"** — provably wrong right now, from the stored value alone.
 Free to detect, certain, fixable today.
 
-**"What has expired?"** — probably fine, but nobody has confirmed it in years.
-Not an error. A shelf life.
+**"What has expired?"** — probably fine, but nothing in the record says anyone
+confirmed it. Not an error. A shelf life.
 
 It is **read-only against the SF Service Guide**: every request to their API
 is a GET. We never write to it. Every output is a
@@ -102,9 +116,11 @@ Internet For All Now                   "41574423832383" — two numbers in one f
 Verified in a real browser: `telLinks: ["tel:null","tel:null"]` while the number
 is printed right beside it. A judge can check it on their phone in ten seconds.
 
-**The model asserted nothing.** Across 80 listings: 0 model discrepancies,
-23 abstentions, 57 matches. That is the design working — we tightened the
-adjudication prompt twice to make it more conservative.
+**The model asserted nothing.** Across 80 hand-audited listings: 0 model
+discrepancies. That is the design working — we tightened the adjudication
+prompt twice to make it more conservative. **It is not a precision claim:**
+the guard was built on the same 80 listings it was then measured on, so that
+zero is fitted, not held out.
 
 ---
 
@@ -112,6 +128,10 @@ adjudication prompt twice to make it more conservative.
 
 Every field carries a promise with a shelf life. Confidence decays on a per-field
 half-life; the evidence that supports it has a ceiling.
+
+**The half-lives, the weights and the evidence ceilings below are judgement
+calls, not measurements.** They were never fitted to data. The right method is
+to mine ShelterTech's change-request history for how often each field changes.
 
 ```
 half-lives     schedule 180d · phone 1095d · address 1095d · website 730d
@@ -126,9 +146,13 @@ The **40 ceiling** is the load-bearing idea: a perfectly formatted phone number
 for an organisation that closed in 2019 is still perfectly formatted. Only the
 source or a human proves currency.
 
-Directory today: **median 36.2/100** · 22 fresh · 586 stale · 205 expired.
+Directory today: **median 36.2/100** · 12 fresh · 596 stale · 205 expired
+(band counts drift a little between runs as agent matches count as
+confirmations; the median has held at 36.2).
 Each listing carries a **next action** — the one cheapest thing that would most
-raise its score. Estimated **~204 volunteer-hours** to move the median to 70.
+raise its score. Estimated **~204 volunteer-hours** to move the median to 70 —
+an estimate resting on an estimate, since it is arithmetic over the judgement
+constants above. It sizes the problem; it does not schedule it.
 
 A "match" from an agent run counts as a confirmation and raises the index. That
 is the loop: the agent running is what makes the number move.
@@ -172,6 +196,15 @@ the in-memory graph.
 
 ## 8. Known weaknesses — say these before a judge finds them
 
+- **Our founding premise was wrong, and we retracted it.** We said 73.6% of
+  listings had "never been verified" and that volunteers at monthly datathons
+  couldn't keep up. Both halves were wrong. `verified_at` was abandoned around
+  2022, so measuring it measures a dead field, not neglect — and the directory
+  is actively maintained (808 of 813 updated within 90 days). Datathons are
+  biweekly per ShelterTech's help centre, though that article is dated
+  5 November 2019, so we can't assert today's cadence. The defensible number is
+  523 (64.3%) with no verification signal at all. This is the sixth claim we
+  have retracted; all six are listed in `FACTS.md` section E.
 - **We audited the wrong API for most of the build.** v1 (`askdarcel.org/api`)
   mangles US area codes into international dialling codes — 510 became Peru,
   209 became Egypt. Every phone finding we had was an artifact of it. The whole

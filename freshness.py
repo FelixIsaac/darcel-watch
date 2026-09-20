@@ -6,8 +6,8 @@
             A phone row with no number. Hours that close before they open.
             Free to detect, certain, and it can be fixed today.
 
-  STALE   - may well be fine, but nobody has confirmed it in a long time.
-            Not an error. An expiry.
+  STALE   - may well be fine, but nothing in the record says anyone confirmed
+            it against reality. Not an error. An expiry.
 
 This module answers the second one. Every field carries an implicit promise
 with a shelf life: a phone number stays true for years, opening hours for
@@ -19,6 +19,13 @@ check proves a value is WELL-FORMED, never that it is CURRENT. "(415) 555-0123"
 is a perfectly well-formed number for an organisation that closed in 2019. Only
 agreement with the organisation's own source, or a human who checked, resets
 the clock.
+
+Why the directory-wide score comes out low, stated carefully: NOT because the
+directory is neglected. It is actively maintained - 808 of 813 approved
+listings were updated within 90 days. The score is low because almost nothing
+carries evidence stronger than "well-formed": `verified_at` stopped being
+written around 2022 and `certified_at` is used rarely (nine records in 2026).
+The missing thing is provenance, not effort. See FACTS.md section F.
 """
 
 import datetime as dt
@@ -31,6 +38,11 @@ NOW = dt.datetime.now(dt.timezone.utc)
 
 # How long a field stays believable without re-confirmation. Half-life in days:
 # after this long, confidence in the value has halved.
+#
+# JUDGEMENT, NOT MEASUREMENT. These were never fitted to data. The right method
+# is to mine ShelterTech's change-request history for how often each field
+# actually changes. Same caveat applies to WEIGHT and EVIDENCE_CEILING below,
+# and to any volunteer-hours figure derived from them.
 HALF_LIFE = {
     "phone": 1095,     # 3y  - orgs keep numbers for a long time
     "address": 1095,   # 3y  - moves are rare but consequential
@@ -43,6 +55,7 @@ HALF_LIFE = {
 
 # How much a person depends on the field being right. An address that is wrong
 # strands someone at a door; a stale email wastes an afternoon.
+# Judgement, not measurement - see the note on HALF_LIFE.
 WEIGHT = {
     "phone": 0.25,
     "address": 0.20,
@@ -55,6 +68,7 @@ WEIGHT = {
 
 # What the evidence is worth. A structural pass cannot exceed its ceiling no
 # matter how recent it is - being well-formed is not being true.
+# Judgement, not measurement - see the note on HALF_LIFE.
 EVIDENCE_CEILING = {
     "human_verified": 100,   # someone checked it against reality
     "source_agreement": 90,  # the organisation's own site says the same thing

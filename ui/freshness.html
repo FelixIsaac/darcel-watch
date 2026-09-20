@@ -471,8 +471,9 @@
   <p class="tagline">Not &ldquo;what is broken?&rdquo; &mdash; &ldquo;what has expired?&rdquo;</p>
   <p class="framing">
     <strong>Broken</strong> is provably wrong right now: a phone row with no number, hours that close before they open. The rest of this app hunts those.
-    <span class="who"><strong>Stale</strong> is different. The listing may well be fine &mdash; nobody has confirmed it in years. That is not an error, it is a shelf life. Every field carries an implicit promise that decays: a phone number stays true for years, opening hours for months. This page scores that decay.</span>
+    <span class="who"><strong>Stale</strong> is different. The listing may well be fine &mdash; but nothing in the record says anyone confirmed it against reality. That is not an error, it is a shelf life. Every field carries an implicit promise that decays: a phone number stays true for years, opening hours for months. This page scores that decay.</span>
   </p>
+  <p class="framing">ShelterTech maintain this directory actively: 808 of 813 approved listings were updated in the last 90 days. What the data lacks is <strong>provenance</strong> &mdash; <code>updated_at</code> says something changed, not that it was checked. So the score below is low mostly because almost nothing carries evidence stronger than &ldquo;well-formed&rdquo;, not because the directory is neglected.</p>
   <p class="source-note">Model and constants: <code>freshness.py</code>. Source directory: sfserviceguide.org (nonprofit ShelterTech).</p>
 </header>
 
@@ -496,13 +497,14 @@
       <div class="curve-wrap" id="curve-slot"></div>
       <div class="curve-legend" id="curve-legend"></div>
     </div>
+    <p class="note"><b>These half-lives are our judgement, not a measurement.</b> They were never fitted to data. The right way to set them is to mine ShelterTech&rsquo;s own change-request history for how often each field actually changes. The same applies to the field weights.</p>
     <p class="note" id="decay-note"></p>
   </section>
 
   <!-- 3. Evidence ladder -->
   <section id="ladder-section">
     <h2>The evidence ladder
-      <span class="sub">What kind of evidence last supported a value sets its ceiling. Age then decays it from there.</span>
+      <span class="sub">What kind of evidence last supported a value sets its ceiling. Age then decays it from there. The ceilings, like the half-lives, are our judgement calls rather than measurements.</span>
     </h2>
     <div class="ladder" id="ladder-slot"></div>
     <div class="ceiling-callout">

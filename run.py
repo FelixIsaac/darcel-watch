@@ -105,16 +105,41 @@ def age_days(ts):
 
 
 def baseline_stats(records):
-    """The finding that justifies the project. Measured, not quoted."""
+    """Provenance coverage, measured. NOT a measure of neglect.
+
+    The directory is actively maintained - nearly every approved listing has
+    been touched in the last 90 days, in daily batches that look like datathon
+    sessions. What is missing is provenance: `updated_at` records THAT something
+    changed, not that anyone confirmed it against reality.
+
+    So the number to report is `no_verification_signal` - listings carrying no
+    verification evidence at all: no `verified_at`, no `certified_at`, and no
+    `certified` flag. An earlier version of this function counted missing
+    `verified_at` alone and called the result "never verified". That was wrong
+    twice over: `verified_at` was abandoned around 2022 (newest value in the
+    corpus is 2022-10-12), so it measures a dead field rather than neglect, and
+    it ignored the listings that carry a `certified` flag with no date.
+    See FACTS.md sections E and F.
+    """
     approved = [r for r in records if r.get("status") == "approved"]
-    ages = [age_days(r.get("verified_at")) for r in approved]
-    known = sorted(a for a in ages if a is not None)
+    updated = sorted(
+        a for a in (age_days(r.get("updated_at")) for r in approved)
+        if a is not None
+    )
     return {
         "sampled": len(records),
         "approved": len(approved),
-        "never_verified": sum(1 for a in ages if a is None),
-        "median_verified_age_days": int(statistics.median(known)) if known else None,
-        "verified_last_year": sum(1 for a in known if a < 365),
+        # No date and no flag - nothing at all saying anyone checked this.
+        "no_verification_signal": sum(
+            1 for r in approved
+            if not r.get("verified_at")
+            and not r.get("certified_at")
+            and not r.get("certified")
+        ),
+        # Evidence of active maintenance, reported alongside so the first
+        # number is never read as "nobody looks at this directory".
+        "median_updated_age_days": int(statistics.median(updated)) if updated else None,
+        "updated_last_90d": sum(1 for a in updated if a <= 90),
         "with_website": sum(1 for r in approved if r.get("website")),
     }
 
@@ -122,7 +147,12 @@ def baseline_stats(records):
 def triage_score(record):
     """Cheap, deterministic, no model calls. Decides where to spend tokens.
 
-    Never-verified + critical category + has a checkable website ranks highest.
+    No `verified_at` + critical category + a checkable website ranks highest.
+
+    Caveat worth stating: `verified_at` stopped being written around 2022, so
+    the age term is saturated for most of the corpus and contributes little
+    ordering. Ranking on freshness score instead would be better; left as-is
+    rather than changed silently.
     """
     if record.get("status") != "approved":
         return 0.0
@@ -161,8 +191,9 @@ def main():
         corpus = {"resources": None, "services": None}
 
     stats = baseline_stats(records)
-    print(f"  {len(records)} records | never verified: {stats['never_verified']}"
-          f"/{stats['approved']} approved")
+    print(f"  {len(records)} records | no verification signal: "
+          f"{stats['no_verification_signal']}/{stats['approved']} approved "
+          f"| {stats['updated_last_90d']} updated in the last 90 days")
 
     # FalkorDB when it is reachable, the in-memory adjacency graph when it is
     # not. Same model, same three queries, cross-checked identical - so the

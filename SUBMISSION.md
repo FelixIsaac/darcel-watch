@@ -5,9 +5,11 @@ Built at a hackathon.
 
 ## Inspiration
 
-We wanted to build an AI resource finder for San Franciscans needing food, shelter, healthcare, legal aid. Before writing code, we searched for prior art, the way we always should. It already exists: ShelterTech's SF Service Guide (sfserviceguide.org) — 1,759 organisations, 7,577 services, ~16,000 monthly users, open source, with a chatbot (`casey`) and a phone line (`VACS-MVP`). Building a 16th directory would have been vanity work at a hackathon that's supposed to help people.
+We wanted to build an AI resource finder for San Franciscans needing food, shelter, healthcare, legal aid. Before writing code, we searched for prior art, the way we always should. It already exists: ShelterTech's SF Service Guide (sfserviceguide.org) — 1,759 organisations and 7,577 services counted from their live API, open source, with a chatbot (`casey`) and a phone line (`VACS-MVP`). ShelterTech report 16,000+ monthly users. Building another directory would have been vanity work at a hackathon that's supposed to help people.
 
-So we asked a different question: what's actually broken about the one that exists? Their listings are vetted by volunteers at monthly datathons — human hours they don't have enough of. That's a resourcing problem, not a discovery problem, and it's the kind of problem an agent can help with.
+So we asked a different question: what's actually broken about the one that exists? Our first answer was that volunteers couldn't keep up with it. That was wrong, and we retracted it — the directory is actively maintained, with 808 of 813 approved listings updated in the last 90 days. What it lacks is **provenance**: `updated_at` records that something changed, not that anyone confirmed it against reality, and the field that would carry that distinction stopped being written around 2022. Nobody — including ShelterTech — can tell a freshly confirmed listing from a stale one. That's a missing instrument, and it's the kind of problem an agent can help with.
+
+Every number in this write-up is in `FACTS.md`, with how it was established.
 
 It's named for Darcel Jackson, who founded ShelterTech after being injured as a welder and becoming unhoused himself.
 
@@ -15,9 +17,9 @@ It's named for Darcel Jackson, who founded ShelterTech after being injured as a 
 
 SF Service Guide Watch checks whether the directory's listings are still true, and how confident it should be that they are. It runs four tiers of checking, cheapest and most certain first: a structural pass over the stored data (free, cannot false-positive), a graph model of the directory (so one org's closure propagates to everything connected to it), and — only when the first tiers can't answer the question — a live fetch of the org's own website adjudicated by Gemini. Everything is a candidate for a human to review, never an assertion of fact, and we never write to ShelterTech's production system.
 
-We measured the problem before building the fix, against the full directory, not a sample: **813 approved organisations. 598 (73.6%) have never been verified or certified by anyone.** The 215 that were, a median of ~7.7 years ago. Only 8 have been confirmed in the last three years.
+We measured the problem before building the fix, against the full directory, not a sample: **813 approved organisations. 808 of them updated within the last 90 days — actively maintained. And 523 (64.3%) carrying no verification signal at all: no `verified_at`, no `certified_at`, not even a `certified` flag.** 144 listings have a `verified_at` date, the newest from 2022-10-12; 124 have a `certified_at` date, nine of them in 2026.
 
-The gap isn't discovery. It's freshness. A wrong shelter address at 9pm is worse than no answer at all.
+The gap isn't discovery, and it isn't effort. It's provenance. A wrong shelter address at 9pm is worse than no answer at all, and right now there is no way to tell which addresses anyone has checked.
 
 ## How we built it
 
@@ -44,7 +46,7 @@ No model, no scraping. Lead example: **Building Futures**, a domestic violence s
 
 ### The live run: structural checks carry the confident findings, the model mostly abstains
 
-At `BUDGET=25` against the full corpus: 33 checked, **8 discrepancies (all structural — the phone defects above), 9 abstained, 16 matched.** None of the discrepancies in this run came from the model's judgment alone. One abstention: our regex evidence-gatherer flagged what looked like a phone number on an org's page, but it was a Zoom meeting ID — the model declined to call it a match or mismatch.
+At `BUDGET=25` against the full corpus: 33 checked, **8 discrepancies (all structural — the phone defects above), 4 abstained, 21 matched.** The abstain/match split moves between runs; the structural 8 does not. None of the discrepancies in this run came from the model's judgment alone. One abstention: our regex evidence-gatherer flagged what looked like a phone number on an org's page, but it was a Zoom meeting ID — the model declined to call it a match or mismatch.
 
 We tightened the adjudication prompt twice specifically to make it more conservative, and it got more conservative. That's the design working, not a limitation: the cheap structural tier now carries every confident finding, and the model's job — judgment on genuinely ambiguous scraped evidence — is done correctly by abstaining when it can't tell.
 
@@ -64,9 +66,11 @@ Two of these four were caught by a person opening the real listing, not by our c
 
 This is the centre of the project, not a side metric. Structural checks answer "is this value wrong right now" for the handful of listings where it's provably true. They can't answer the far more common case: nobody has looked at this listing in years, it's probably fine, and "probably" isn't good enough for someone deciding where to sleep tonight.
 
-`freshness.py` treats staleness as **expiry, not error**. Every field has a half-life — phone/address 3 years, website/email 2 years, schedule 6 months — and a score decays from whatever evidence last supported it. The idea that makes this work: **evidence has a ceiling, not just an age.** A structural pass proves a value is well-formed, capped at 40/100, no matter how recently it was touched — because `(415) 555-0123` is a perfectly well-formed number for an organisation that closed in 2019. Only the organisation's own current source, or a human, resets the clock to a higher ceiling.
+`freshness.py` treats staleness as **expiry, not error**. Every field has a half-life — phone/address 3 years, website/email 2 years, schedule 6 months — and a score decays from whatever evidence last supported it. **Those half-lives, the field weights and the evidence ceilings are our judgement calls, never fitted to data**; the right method is to mine ShelterTech's change-request history for how often each field actually changes. The idea that makes this work: **evidence has a ceiling, not just an age.** A structural pass proves a value is well-formed, capped at 40/100, no matter how recently it was touched — because `(415) 555-0123` is a perfectly well-formed number for an organisation that closed in 2019. Only the organisation's own current source, or a human, resets the clock to a higher ceiling.
 
-Run against all 813 approved listings: **median freshness 36.2/100. 8 fresh (1.0%), 600 stale (73.8%), 205 expired (25.2%).** Every listing gets one named next action — the single cheapest thing that would raise its score most — so the output is a work plan, not a guilt trip. We estimate roughly **204 volunteer-hours** to move the median from 36 to 70. That's a number ShelterTech's current monthly-datathon process has never had, because nobody has scored the whole directory this way.
+Run against all 813 approved listings: **median freshness 36.2/100. 12 fresh (1.5%), 596 stale (73.3%), 205 expired (25.2%).** The band counts shift a little between runs, because an agent "match" counts as a confirmation; the median has held at 36.2. Every listing gets one named next action — the single cheapest thing that would raise its score most — so the output is a work plan, not a guilt trip. We estimate roughly **204 volunteer-hours** to move the median from 36 to 70 — an estimate resting on an estimate, since it is arithmetic over the judgement constants above. Its value is that no figure of any kind existed before, because nobody had scored the whole directory this way.
+
+The low score is not an indictment of ShelterTech's upkeep. It is low because almost nothing in the data carries evidence stronger than "well-formed" — which is the missing instrument, not missing work.
 
 We tested whether the method generalises past phones by applying it once to opening hours: **32 schedule entries across 13 organisations close before they open**, 20 of them looking like a "9 to 5" typed as 09:00–05:00. Same method, different field, a correction a volunteer can compute rather than just a flag.
 
@@ -80,15 +84,15 @@ We tested whether the method generalises past phones by applying it once to open
 ## Accomplishments we're proud of
 
 - We searched first and found the real gap instead of shipping a duplicate directory.
-- We measured the gap against the full directory, not a sample — 813 approved orgs, 73.6% never confirmed by anyone.
+- We measured the gap against the full directory, not a sample — 813 approved orgs, 523 of them (64.3%) carrying no verification signal at all.
 - Our strongest per-listing finding needed no model: 8 structural phone defects, provable from the stored value, cannot false-positive. Lead example: a domestic-violence organisation's Call button dials nothing.
-- We built a second product on top of the first: a freshness index that scores the whole directory for currency and gives every listing a named next action, with a cost estimate (~204 hours) ShelterTech doesn't have today.
-- We caught four of our own bugs by reading the output, never by a test — and retracted a headline finding in public rather than let it stand. Two of the four were caught by a human opening the real listing, which is exactly what the human-in-the-loop design is for.
+- We built a second product on top of the first: a freshness index that scores the whole directory for currency and gives every listing a named next action, with a cost estimate (~204 hours — an estimate, clearly labelled as one) that nobody has had before.
+- We caught four of our own bugs by reading the output, never by a test — and retracted six claims in public rather than let them stand, including the premise the whole project started from. Two of the four bugs were caught by a human opening the real listing, which is exactly what the human-in-the-loop design is for. All six retractions are listed in `FACTS.md` section E.
 - We're precise about what we did and didn't use. FalkorDB is real — Docker, Cypher, 7,405 nodes, cross-checked against an in-memory twin for parity. Gemini 2.5 Flash runs over OpenRouter, not the direct Google API; the direct path exists in the code but we didn't exercise it. iMessage review is wired against the real Spectrum SDK but has never delivered a message — the shared-line pool still refuses our allowlisted recipient. No production writes, ever.
 
 ## What we learned
 
-Prior-art search is the highest-leverage hour of a hackathon, and so is checking your own sources a second time. The organisation-with-best-intentions problem in civic tech usually isn't "no one built a directory" — it's that the directory exists and nobody has the hours to keep it honest. We learned that the same discipline applies to our own pipeline: our most expensive, most impressive-looking tier (a model reading a live website) was also the one that produced every false positive we found. The fix in both cases was the same instinct — check the cheap, certain thing first, and don't trust confidence you haven't verified.
+Prior-art search is the highest-leverage hour of a hackathon, and so is checking your own sources a second time — including the premise you started from. Our first read was the familiar civic-tech story: the directory exists and nobody has the hours to keep it honest. When we actually measured it, that story was wrong. The directory is maintained; what it lacks is a record of what was checked. The comfortable narrative was the thing that needed checking hardest. We learned that the same discipline applies to our own pipeline: our most expensive, most impressive-looking tier (a model reading a live website) was also the one that produced every false positive we found. The fix in both cases was the same instinct — check the cheap, certain thing first, and don't trust confidence you haven't verified.
 
 ## What's next
 
@@ -102,14 +106,14 @@ Prior-art search is the highest-leverage hour of a hackathon, and so is checking
 
 | Time | Beat |
 |---|---|
-| 0:00–0:15 | "We set out to build an AI resource finder for SF. Then we searched — it already exists." Show sfserviceguide.org, mention 1,759 orgs / 16,000 monthly users. |
-| 0:15–0:30 | "So we measured what's actually broken." Full corpus, not a sample: 813 approved orgs, 73.6% never verified or certified by anyone, the rest a median of 7.7 years ago. |
+| 0:00–0:15 | "We set out to build an AI resource finder for SF. Then we searched — it already exists." Show sfserviceguide.org, mention 1,759 orgs; ShelterTech report 16,000+ monthly users. |
+| 0:15–0:30 | "So we measured what's actually broken — and our first answer was wrong." Full corpus, not a sample: 813 approved orgs, 808 updated in the last 90 days, so it's actively maintained. But 523 of them (64.3%) carry no verification signal at all. `updated_at` says something changed; it doesn't say anyone checked. |
 | 0:30–0:45 | The real structural finding: 8 of 813 listings have a phone defect provable from the stored value alone. Lead with Building Futures — a domestic-violence organisation whose Call button dials `tel:null` while a working number sits unused in the label field beside it. No model, cannot false-positive. |
 | 0:45–0:55 | Say the retraction out loud: our first version of this exact finding was wrong — we were reading a superseded API whose phone formatter mangled US numbers into fake international ones. We caught it, deleted the false claim, and rebuilt the check against the API the live site actually uses. |
-| 0:55–1:10 | Open the Freshness page: median 36.2/100, 600 of 813 listings stale, 205 expired, each with one named next action. Explain the one idea that matters: a well-formed value that's never been confirmed caps at 40 — being well-formed isn't being current. |
-| 1:10–1:20 | Show the live dashboard: trigger a run over SSE, watch the four-tier pipeline execute — structural, graph (FalkorDB, 7,405 nodes), live-source, Gemini adjudication — landing on 8 discrepancies, 9 abstentions, 16 matches. |
+| 0:55–1:10 | Open the Freshness page: median 36.2/100, 596 of 813 listings stale, 205 expired, each with one named next action. Explain the one idea that matters: a well-formed value with no record of confirmation caps at 40 — being well-formed isn't being current. |
+| 1:10–1:20 | Show the live dashboard: trigger a run over SSE, watch the four-tier pipeline execute — structural, graph (FalkorDB, 7,405 nodes), live-source, Gemini adjudication — landing on 8 structural discrepancies, the rest abstain or match. |
 | 1:20–1:28 | The human-in-the-loop story: two of our four self-caught bugs, including the API mistake, were found by a person opening the real listing, not by our code. That's the argument for shipping a review queue instead of an auto-updater. |
-| 1:28–1:30 | Close: "This isn't a 16th directory. It's fewer volunteer-hours to keep the one that exists honest. Next step: give it to ShelterTech." |
+| 1:28–1:30 | Close: "This isn't another directory, and it isn't a complaint about ShelterTech — they maintain this actively. It's the instrument their data doesn't have: a record of what's actually been checked. Next step: give it to them." |
 
 ## Anticipated judge questions
 
@@ -130,6 +134,9 @@ We don't claim it is across the board — we retracted our first headline findin
 
 **Didn't you get a finding wrong (the phone numbers)?**
 Yes — badly, and publicly. Our first pass read a superseded API whose phone formatter corrupted US numbers into fake international ones, and we published 24 "undialable" numbers as a headline finding before catching it. 21 of 23 were artifacts. We deleted the claim, rebuilt the check against the API the live site actually uses, and found a smaller, verified, structurally-provable version of the same idea (8 of 813). We're leading with this story, not hiding it, because catching your own headline finding being wrong and saying so is a stronger claim about everything else in this repo than getting it right the first time would have been.
+
+**Aren't you just saying a nonprofit is bad at its job?**
+No, and we had to correct ourselves to be sure of that. We started out claiming 73.6% of listings had "never been verified" and that monthly datathons couldn't keep up. Both halves were wrong. The `verified_at` field was abandoned around 2022, so measuring it measures a dead field, not neglect — and 808 of 813 approved listings were updated within the last 90 days, which is an actively maintained directory by any reading. ShelterTech run this on roughly $200,000 a year with volunteers and paid community representatives, including people with lived experience of homelessness. Their help centre describes datathons every two weeks, but that article is dated 5 November 2019, so we don't assert today's cadence. What we found is a missing instrument, not a failing organisation: there is no machine-readable record of what was confirmed, so nothing can tell a fresh listing from a stale one. The defensible number is 523 of 813 (64.3%) with no verification signal at all.
 
 **Are you calling Gemini directly through Google's API?**
 No — our runs go through OpenRouter (`google/gemini-2.5-flash`). The code also has a direct-Google-AI-Studio path that activates on a Google-shaped key, but we didn't exercise it in the runs we're demoing. Same model and prompt either way; only the transport differs.

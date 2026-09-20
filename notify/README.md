@@ -82,8 +82,10 @@ JS-only, ambiguous). There is no proposed replacement, so there is nothing to
 | `F` | Needs fixing | `out/flagged.json` |
 
 A `looks_right` is not a change request and is never written as one. It records
-that a human checked the listing on this date — which, in a directory where 126
-of 138 sampled listings had never been verified even once, is real progress.
+that a human checked the listing on this date — which, in a directory where 523
+of 813 approved listings carry no verification signal at all (no `verified_at`,
+no `certified_at`, no `certified` flag), is real progress. The listings are
+maintained; what they lack is a record of what was confirmed.
 
 Either kind:
 
