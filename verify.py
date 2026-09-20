@@ -16,6 +16,10 @@ import re
 import urllib.error
 import urllib.request
 
+import envfile
+
+envfile.load()
+
 DATA = pathlib.Path(__file__).parent / "data_v2"
 UA = {"User-Agent": "sfsg-watch/0.2 (Hack for Humanity SF; read-only)"}
 API = os.environ.get("SFSG_API", "https://www.sfserviceguide.org/api/v2")

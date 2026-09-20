@@ -23,6 +23,10 @@ import statistics
 import graph as G
 import harvest
 
+import envfile
+
+envfile.load()
+
 OUT = pathlib.Path(__file__).parent / "out"
 NOW = dt.datetime.now(dt.timezone.utc)
 

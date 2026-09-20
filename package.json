@@ -5,10 +5,10 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node notify/spectrum.ts",
+    "start": "node --env-file-if-exists=.env notify/spectrum.ts",
     "typecheck": "tsc --noEmit",
-    "review": "node notify/spectrum.ts",
-    "web": "node notify/web.ts"
+    "review": "node --env-file-if-exists=.env notify/spectrum.ts",
+    "web": "node --env-file-if-exists=.env notify/web.ts"
   },
   "repository": {
     "type": "git",

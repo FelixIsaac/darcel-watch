@@ -23,6 +23,10 @@ the clock.
 
 import datetime as dt
 
+import envfile
+
+envfile.load()
+
 NOW = dt.datetime.now(dt.timezone.utc)
 
 # How long a field stays believable without re-confirmation. Half-life in days:
