@@ -352,6 +352,122 @@ def check_phone_format(record):
     }
 
 
+# A page has to carry real content before its silence means anything. Measured
+# on the corpus, the listings this check first flagged had a median of 17.5k
+# characters but a long tail down to 423 - and every one of those thin ones was
+# a JavaScript shell whose address we simply had not rendered. Callers must
+# render before concluding absence (see fetcher.render_fetch).
+MIN_IDENTITY_CHARS = 1200
+
+
+def identity_anchors(record):
+    """The facts that would prove a page belongs to this listing.
+
+    Address and phone only - deliberately NOT the name. Plenty of legitimate
+    organisations run a domain with no relation to what they are called (Meals
+    on Wheels at feedingseniors.org), and name-to-domain similarity would flag
+    every one of them. A street, a ZIP or a working number is a fact about the
+    body; a domain name is branding.
+    """
+    phones, places = [], []
+    for p in record.get("phones") or []:
+        n = norm_phone(p.get("number"))
+        if n:
+            phones.append(n)
+    for a in record.get("addresses") or []:
+        zipcode = (a.get("postal_code") or "").strip()
+        if zipcode:
+            places.append(("postal_code", zipcode))
+        street = (a.get("address_1") or "").strip()
+        # House number + first word of the street name: distinctive enough to
+        # mean something, short enough to survive the site writing "Ave" for
+        # "Avenue" or dropping a "Suite 300".
+        head = " ".join(street.split()[:2])
+        if len(head) >= 6:
+            places.append(("street", head))
+        city = (a.get("city") or "").strip()
+        if len(city) >= 4:
+            places.append(("city", city))
+    return phones, places
+
+
+def find_identity_anchor(record, texts):
+    """First anchor that appears in any fetched page, or None. (kind, value, url)."""
+    phones, places = identity_anchors(record)
+    for url, t in texts.items():
+        low = t.lower()
+        for n in phones:
+            if any(norm_phone(m.group()) == n for m in PHONE_RE.finditer(t)):
+                return "phone", n, url
+        for kind, value in places:
+            if value.lower() in low:
+                return kind, value, url
+    return None
+
+
+def check_website_identity(record, texts):
+    """The website on file may not be this organisation's website at all.
+
+    Two real examples from the corpus, both user-facing:
+
+        Getting Out & Staying Out   1485 Bayshore Blvd, San Francisco 94124
+                                    website gosonyc.org -> a New York charity
+        Goodwill Industries of
+        the Greater East Bay        10800 International Blvd, Oakland
+                                    website sfgoodwill.org -> a different entity
+
+    A San Franciscan looking for reentry support clicks through to New York.
+    No model is needed to see it: fetch the site and ask whether ANY of this
+    listing's addresses or phone numbers appear on it. If none do, the site
+    probably is not theirs.
+
+    Three conditions have to hold before this is reported, because each of them
+    was a way to be wrong:
+
+      1. We have something to look for. A listing with no address and no phone
+         cannot corroborate anything, so it is skipped rather than accused.
+      2. We actually READ a page. A site that 403s, times out, or returns a JS
+         shell with no text mentions nothing at all - that is our failure, not
+         the listing's, and reporting it would drown the real ones.
+      3. Nothing matched anywhere across every page fetched.
+
+    The evidence here is an absence, so the finding records what was looked for
+    rather than a quote. A volunteer checks it by opening the site and using
+    their eyes, which takes about ten seconds.
+    """
+    website = record.get("website")
+    if not website:
+        return None
+
+    phones, places = identity_anchors(record)
+    if not phones and not places:
+        return None  # nothing to corroborate against
+
+    readable = {u: t for u, t in (texts or {}).items() if t and len(t) >= MIN_IDENTITY_CHARS}
+    if not readable:
+        return None  # unreachable or JS-only: our problem, not a finding
+
+    if find_identity_anchor(record, readable):
+        return None
+
+    looked_for = [f"phone {p}" for p in phones] + [f"{k} {v!r}" for k, v in places]
+    summary = ", ".join(looked_for[:6])
+    return {
+        "field": "website_identity",
+        "stored": website,
+        "live": "none of this listing's addresses or phone numbers appear on that site",
+        "evidence_url": website,
+        "evidence_quote": (
+            f"Fetched {len(readable)} page(s) on {website} and found none of: {summary}. "
+            "The website on file may belong to a different organisation."
+        ),
+        "match": False,
+        "structural": True,
+        "checked_pages": sorted(readable),
+        "looked_for": looked_for,
+    }
+
+
 def check_closure(texts):
     """A closure claim has to come from prose a person could read on the page.
 
@@ -545,8 +661,45 @@ def build_change_request(record, findings, verdict):
     # issues no write request of any kind. A human reviews and submits it.
 
 
+def _agent_verdict(record, api_key):
+    """Opt-in tool-calling path (AGENT=1). Returns a verdict dict or None.
+
+    None means "deterministic path please" and is returned for every failure
+    mode: no key, agent import broken, model unreachable, anything raised. The
+    agent is an upgrade to how evidence is gathered, not a new way for a run to
+    die - a venue hotspot at 2am must degrade to regex, not to a traceback.
+
+    Deliberately off by default. The deterministic path is what we have measured
+    and retracted findings from; the agent is newer and less proven, and this
+    project has already shipped three findings it had to take back.
+    """
+    if os.environ.get("AGENT") != "1" or not api_key:
+        return None
+    try:
+        import agent  # imported lazily so a syntax error there can't break verify
+        result = agent.investigate(record, api_key)
+    except Exception:
+        return None
+    if not isinstance(result, dict) or result.get("verdict") not in (
+        "discrepancy", "match", "abstain"
+    ):
+        return None
+    # The agent reports separately on "I looked and could not tell" (a real
+    # abstention, keep it) and "I never reached the model" (a dead key, a quota
+    # wall, a Google key on an OpenAI-shaped API). Only the first is an answer.
+    # Without this the second silently abstains on every listing in the run,
+    # which looks like a verified result and is not one.
+    if result.get("agent_unavailable"):
+        return None
+    return result
+
+
 def verify(record, api_key=None):
     """Re-verify one AskDarcel record against its live website. Never raises."""
+    agent_result = _agent_verdict(record, api_key)
+    if agent_result is not None:
+        return agent_result
+
     rid = record.get("id")
     name = record.get("name", "")
     website = record.get("website")
