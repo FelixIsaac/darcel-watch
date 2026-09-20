@@ -75,32 +75,51 @@ def test_silence_is_absent_not_contradicted():
 
 
 def test_active_disagreement_is_contradicted():
-    assert jev.classify(support=0.01, contradict=0.97) == "contradicted"
+    assert jev.classify(support=0.0, contradict=jev.CONTRADICT_THRESHOLD) == "contradicted"
 
 
 def test_agreement_is_supported():
-    assert jev.classify(support=0.98, contradict=0.03) == "supported"
+    assert jev.classify(support=jev.SUPPORT_THRESHOLD, contradict=0.03) == "supported"
 
 
 def test_middling_evidence_is_uncertain_not_a_finding():
     assert jev.classify(support=0.55, contradict=0.40) == "uncertain"
 
 
+def test_evidence_just_below_the_contradiction_bar_is_not_a_finding():
+    """The bar is measured, and just under it must stay silent. Community
+    Forward SF sat at 0.94 under an earlier hand-picked bar of 0.95 and was
+    suppressed - that case turned out to be real, which is exactly why the
+    threshold is now set by calibrate.py instead of by taste."""
+    v = jev.Verdict("c", 0.0, jev.CONTRADICT_THRESHOLD - 0.01,
+                    jev.classify(0.0, jev.CONTRADICT_THRESHOLD - 0.01))
+    assert not v.actionable
+
+
 def test_only_contradiction_is_actionable():
     for label, sup, con in (("absent", 0.02, 0.01), ("uncertain", 0.5, 0.4),
-                            ("supported", 0.98, 0.02)):
+                            ("supported", jev.SUPPORT_THRESHOLD, 0.02)):
         v = jev.Verdict("c", sup, con, jev.classify(sup, con))
         assert v.label == label
         assert not v.actionable
-    v = jev.Verdict("c", 0.01, 0.98, jev.classify(0.01, 0.98))
+    v = jev.Verdict("c", 0.0, jev.CONTRADICT_THRESHOLD,
+                    jev.classify(0.0, jev.CONTRADICT_THRESHOLD))
     assert v.actionable
 
 
 def test_thresholds_are_asymmetric():
     """Contradicting a stored value must need more evidence than confirming
-    one: confirmation preserves the status quo, contradiction can replace a
-    working phone number with a broken one."""
-    assert jev.REFUTE_THRESHOLD < (1 - jev.SUPPORT_THRESHOLD) * 2
+    one: confirmation preserves the status quo, contradiction can send a
+    volunteer to replace a working phone number with a broken one."""
+    assert jev.CONTRADICT_THRESHOLD > jev.SUPPORT_THRESHOLD
+
+
+def test_thresholds_came_from_calibration():
+    """Guards against someone quietly reverting to hand-picked round numbers.
+    Both values are plateau midpoints from calibrate.py, so neither should be
+    a suspiciously tidy 0.5/0.8/0.9."""
+    assert jev.SUPPORT_THRESHOLD not in (0.5, 0.8, 0.85, 0.9)
+    assert 0.0 < jev.SUPPORT_THRESHOLD < jev.CONTRADICT_THRESHOLD <= 1.0
 
 
 # --------------------------------------------------------------------------

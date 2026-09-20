@@ -34,6 +34,28 @@ Run `BUDGET=25 .venv/bin/python run.py`, `.venv/bin/python freshness.py`,
 | Median freshness | **36.2 / 100** | `freshness.py` |
 | Agent cost | **$0.0046/listing**, ~8.8s | 22 listings, live OpenRouter pricing |
 | Agent false positives | **2 of 7 discrepancies** (pre-fix) | hand-audited 80 listings |
+| Sites publishing a sitemap | **49 of 60 (81%)**, 32 declared in `robots.txt` | live probe, random sample |
+| Sites carrying `<lastmod>` | 39 of 60 (65%) | same |
+| Jev cost per organisation | **$0.000316**, ~1.3s → **~$0.26** for all 813 | 12 orgs, live pricing |
+
+### Calibration — held out, `calibrate.py`
+
+444 (claim, page) rows over 43 organisations. Split **by organisation**, so no
+site's page text crosses the split. Ground truth is a mechanical oracle — does the
+stored value appear, normalised, in the fetched page — so nothing graded its own
+work. Rows the oracle cannot decide are **excluded**, not guessed.
+
+| Fact | Value |
+|---|---|
+| AUROC, held-out test half (three-way Choice) | **0.992** |
+| ECE, held-out | 0.042 (two-noul form: 0.024) |
+| `support ≥ 0.69` | **precision 1.000, recall 0.867** (tp 65, fp 0, fn 10) |
+| `contradict ≥ 0.99` | **12 flagged, 0 of them actually on the page** |
+| Two-noul form at `contradict ≥ 0.99` | flags **nothing**; at ≥0.90 flags 14, of which **5 are actually on the page** |
+
+**This measures faithfulness, not factuality** — whether the judge reads the page
+correctly, not whether the directory is right about the world. A phone number can
+be correct and simply unpublished. Say it that way.
 
 ## B. Verified in a browser, on the live site
 

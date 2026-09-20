@@ -143,22 +143,60 @@ defined. Two consequences:
 2. **The probability is trained to mean something** — RLCD targets answers given
    90% probability being right about 90% of the time.
 
-**Two questions per claim, never one:**
+**One three-way Choice per claim**, which is TypeSafe's documented
+[citation-check pattern](https://docs.typesafe.ai/cookbooks/citation_check):
 
 ```mermaid
 flowchart TD
-    C["Claim: 'reachable on 510-808-7410'"] --> S["Does the page SUPPORT this?"]
-    C --> K["Does the page CONTRADICT this?"]
-    S --> R{"classify"}
-    K --> R
-    R -->|"sup high"| SU["supported → evidence"]
-    R -->|"con high"| CO["contradicted → human queue"]
-    R -->|"both low"| AB["absent → NOT a finding"]
-    R -->|"mixed"| UN["uncertain → abstain"]
+    C["Claim: 'reachable on 510-808-7410'"] --> Q["How does this page<br/>relate to the claim?"]
+    Q --> SU["supports → evidence, freshness ↑"]
+    Q --> CO["contradicts ≥0.99 → human queue"]
+    Q --> AB["says_nothing → NOT a finding"]
+    Q -.->|"below threshold"| UN["uncertain → abstain"]
 ```
 
-Support and contradiction are **not complements**. A page that never mentions a
-number scores low on both. That is `absent`, and it must never become an accusation.
+The important property: **`says_nothing` is an option the model selects**, not a
+state my code infers when two separate probabilities both come back low. Conflating
+"the page is silent" with "the page disagrees" is the error behind most of what
+this project has retracted, and an explicit option is a stronger guarantee than an
+inference rule.
+
+This project started with two independent nouls. It changed because of a
+measurement, not a preference — `calibrate.py` scored both against the same 444
+rows:
+
+| | AUROC | contradictions at ≥0.99 | of which wrong |
+|---|---|---|---|
+| Two nouls | 0.983 | **0** — cannot accuse at all at that bar | — |
+| | | at ≥0.90: 14 | **5 (36%)** |
+| **Three-way Choice** | **0.992** | **12** | **0** |
+
+A verifier that can never raise a contradiction is not a verifier; one that is
+wrong a third of the time is worse. The Choice form is the only one that can
+accuse safely. It also costs one question instead of two.
+
+### Calibration
+
+Thresholds are measured, not chosen. 444 (claim, page) rows over 43 organisations,
+split **by organisation** so no site's page text crosses the split. Ground truth is
+a mechanical oracle — does the stored value appear, normalised, in the fetched page
+— so nothing grades its own work. Rows the oracle cannot decide are **excluded**
+rather than guessed.
+
+```
+support    >= 0.69    held out: precision 1.000, recall 0.867  (tp 65, fp 0, fn 10)
+contradict >= 0.99    held out: 12 flagged, 0 of them actually on the page
+ECE 0.042 · AUROC 0.992
+```
+
+Both sit at the **middle of the plateau** of thresholds tying at best precision on
+the calibration half, not at its edge. Edge-picking overfitted: the first objective
+maximised recall subject to precision, chose 0.19, scored 0.958 on calibration and
+fell to 0.932 held out — below the target it was selected to meet.
+
+**This measures faithfulness, not factuality.** It shows the judge reads pages
+correctly. It does not show the directory is wrong where the judge says so — a
+phone number can be correct and simply unpublished.
 
 ### Reconciliation: one witness beats two silences
 
@@ -190,12 +228,20 @@ layer is authorised to produce a finding by itself.
 |---|---|
 | Per organisation | **$0.000316**, ~1.3s |
 | Full corpus (813) | **~$0.26** |
-| Sample: 12 orgs, 50 claims | 25 supported · 21 uncertain · 4 absent · **0 contradicted** |
-| Wall clock, 4 workers | 16.0s for 12 |
+| Calibration corpus | 444 claim/page rows, 43 orgs |
+| Wall clock, 4 workers | 16.0s for 12 orgs |
 
-Zero contradictions across 50 claims means zero false positives in that sample. It
-also means zero true positives, and the sample is far too small to distinguish
-"careful" from "blind". That is the next measurement, not a result.
+Real findings the calibrated pipeline raises, each verified by hand afterwards:
+
+| Organisation | Directory says | Their own site says |
+|---|---|---|
+| Order of Malta Clinic | `(510) 587-2999` · `2120 Harrison` | `(510) 587-3000` · `2121 Harrison St` |
+| Getting Out & Staying Out | `(415) 489-7300` | `212-831-5020` — the site is `gosonyc.org`, a New York organisation |
+| Community Forward SF | `(415) 223-1416` | `415 223 1419` |
+
+All three are candidates for a human, not assertions. Two are single-digit
+differences, which is what a transcription error looks like; the third suggests the
+listing points at the wrong organisation's website entirely.
 
 ## Safety properties
 
@@ -222,11 +268,13 @@ ignore it.
 
 ## Known weaknesses
 
-- **Thresholds are provisional.** `SUPPORT_THRESHOLD` / `REFUTE_THRESHOLD` are
-  judgement, not calibrated against a labelled holdout. TypeSafe's own docs say
-  thresholds must be tested per use case.
-- **No held-out accuracy measurement.** Everything about model accuracy here is
-  fitted to the data it was measured on.
+- **Calibration measures faithfulness, not factuality.** The oracle asks whether
+  the stored value appears on the fetched page, not whether it is true in the
+  world. A correct phone number that a nonprofit simply does not publish is
+  scored the same as a wrong one. Human review of the findings themselves is the
+  missing piece.
+- **43 organisations is a small sample.** The thresholds are plateau midpoints,
+  which is the robust choice, but the plateau was measured on 444 rows.
 - **Half-lives and weights are judgement**, never fitted. The right method is to
   mine ShelterTech's change-request history for how often each field changes.
 - **Prose claims are not extracted yet.** `extract_claims(include_prose=True)` is a

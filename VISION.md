@@ -140,13 +140,20 @@ you do.
 |---|---|---|
 | Median freshness | 36.2 | 70 |
 | Listings with any verification signal | 290 / 813 | all |
-| False-positive rate on findings | **unmeasured** | measured, held-out, <5% |
+| False-positive rate on findings | **0 of 12 flagged, held out** | stays at 0 as the corpus grows |
 | Structural defects outstanding | 8 | 0 |
 | Cost to audit the full corpus | ~$0.26 | stays under $1 |
 
-The third row is the honest gap. Every accuracy figure in this repo is currently
-fitted to the data it was measured on. Until there is a hand-labelled holdout, we
-have a system that abstains carefully and no proof of how often it should have.
+That third row is now measured rather than asserted. `calibrate.py` scores the
+judge against a mechanical oracle over 444 (claim, page) rows from 43
+organisations, split **by organisation** so no site's text crosses the split:
+AUROC **0.992**, and at the chosen thresholds **precision 1.000 / recall 0.867**
+held out, with **0 false accusations** among 12 contradictions raised.
+
+The remaining honesty: this measures *faithfulness* — whether the judge reads a
+page correctly — not *factuality*, which is whether the directory is right about
+the world. A phone number can be correct and simply not published. Closing that
+gap needs human review of the findings themselves, and that has not been done.
 
 ---
 

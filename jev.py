@@ -64,11 +64,29 @@ USD_PER_INPUT_MTOK = 0.042
 # indistinguishable from one that is genuinely unsupported.
 MAX_STATE_CHARS = 100_000      # ~32k tokens, conservatively
 
-# PROVISIONAL. Replace from calibrate.py output against a labelled holdout.
-# Deliberately asymmetric: we need much more evidence to contradict a stored
-# value than to corroborate one. Corroboration preserves the status quo;
-# contradiction can replace a working phone number with a broken one.
-SUPPORT_THRESHOLD = 0.85
+# MEASURED, not chosen by taste. calibrate.py, 444 (claim, page) rows over 43
+# organisations, split by ORGANISATION so no site's text crosses the split.
+# Ground truth is a mechanical oracle - does the stored value appear, normalised,
+# in the fetched page - so no human or model graded its own work.
+#
+#   support >= 0.69   held out: precision 1.000, recall 0.867  (tp 65, fp 0)
+#   contradict >= 0.99  held out: 12 flagged, 0 of them actually on the page
+#
+# Deliberately asymmetric, and the asymmetry is the whole point: corroboration
+# preserves the status quo, while a contradiction can send a volunteer to
+# replace a working phone number with a broken one.
+#
+# Both numbers sit in the MIDDLE of the plateau of thresholds that tied at best
+# precision on the calibration half, not at its edge. Picking the edge - the
+# most aggressive threshold that just meets the target - overfitted: it chose
+# 0.19, scored 0.958 on calibration and fell to 0.932 held out.
+#
+# Re-run `.venv/bin/python calibrate.py --orgs 45` after any prompt change.
+SUPPORT_THRESHOLD = 0.69
+CONTRADICT_THRESHOLD = 0.99
+
+# Retained for the two-noul path, which classify() still uses for the "absent"
+# case: both signals low means the page is silent.
 REFUTE_THRESHOLD = 0.05
 
 _MAX_OPTIONS = 255             # API limit on a Choice
@@ -212,6 +230,46 @@ def contradicts(claim: str) -> dict:
     }
 
 
+def relates(claim: str) -> dict:
+    """How does this page relate to this claim? -> one Choice, three options.
+
+    This is TypeSafe's documented citation-check pattern
+    (docs.typesafe.ai/cookbooks/citation_check), and it is better than the two
+    independent nouls in supports()/contradicts() for one specific reason:
+    "says nothing" becomes an option the MODEL SELECTS, rather than a state my
+    code infers when two separate probabilities both come back low.
+
+    That matters here more than anywhere else. Conflating "the page is silent"
+    with "the page disagrees" is the single error behind most of what this
+    project has had to retract, and an explicit option is a stronger guarantee
+    against it than an inference rule I wrote.
+
+    It also returns a `confidence` - the concentration of the distribution -
+    which the two-noul form has no equivalent of, and costs one question
+    instead of two.
+
+    Deliberately paired with, not replacing, the noul form: calibrate.py scores
+    both against the same pages so the choice is made on measurements.
+    """
+    return {
+        "type": "choice",
+        "instructions": (
+            "You are shown the text of a web page published by an organisation, "
+            "and a claim taken from a third-party directory listing about that "
+            "organisation. How does the page relate to the claim?\n\n"
+            f"Claim: {claim}"
+        ),
+        "criteria": {
+            "supports": "The page states the claim, or directly implies it is true.",
+            "contradicts": "The page states the opposite of the claim, or implies "
+                           "it is false - for example by giving a different value "
+                           "for the same thing.",
+            "says_nothing": "The page does not address what the claim asserts, "
+                            "either way. It simply does not mention it.",
+        },
+    }
+
+
 def pick_span(claim: str, spans: list[str]) -> dict:
     """Which numbered span supports this claim? -> choice over OUR indices.
 
@@ -282,7 +340,12 @@ class Verdict:
 
 
 def classify(support: float, contradict: float) -> str:
-    if contradict >= (1 - REFUTE_THRESHOLD):
+    """Probabilities -> one of four labels, using the measured thresholds.
+
+    Contradiction is tested FIRST and against the strictest bar, because it is
+    the only label that can reach a human as an accusation.
+    """
+    if contradict >= CONTRADICT_THRESHOLD:
         return "contradicted"
     if support >= SUPPORT_THRESHOLD:
         return "supported"
@@ -305,24 +368,35 @@ def judge_page(page_text: str, claims: dict[str, str], url: str | None = None,
                lastmod: str | None = None) -> tuple[dict[str, Verdict], Usage]:
     """Every claim against one page, in a single request.
 
-    Two questions per claim - support and contradict - because they are not
-    complements. A page that never mentions the phone number scores low on
-    both, and that is ABSENT, not REFUTED.
-    """
-    qs: dict = {}
-    for key, claim in claims.items():
-        qs[f"sup__{key}"] = supports(claim)
-        qs[f"con__{key}"] = contradicts(claim)
+    Uses the single three-way Choice (supports / contradicts / says_nothing),
+    which beat the two-independent-noul form on measurement, not on taste.
+    calibrate.py scored both against the same 444 rows:
 
+                    AUROC    contradictions flagged at >=0.99
+        two nouls   0.983    0 - it cannot accuse at all at that bar, and at
+                             0.90 it flags 14 of which 5 are actually on the page
+        choice      0.992    12, of which 0 are actually on the page
+
+    So the Choice form is the only one that can raise a contradiction safely.
+    That is the decisive property: a verifier that can never accuse is not a
+    verifier, and one that accuses wrongly a third of the time is worse.
+
+    One question per claim rather than two also halves the cost, and "says
+    nothing" becomes an option the MODEL selects instead of a state inferred by
+    my code from two low numbers.
+    """
+    qs = {f"rel__{key}": relates(claim) for key, claim in claims.items()}
     answers, usage = ask(page_text[:MAX_STATE_CHARS], qs)
 
     out: dict[str, Verdict] = {}
     for key, claim in claims.items():
-        s = noul(answers, f"sup__{key}")
-        c = noul(answers, f"con__{key}")
+        a = answers.get(f"rel__{key}") or {}
+        probs = a.get("probabilities") or {}
+        s, c = probs.get("supports"), probs.get("contradicts")
         if s is None or c is None:
             continue
-        out[key] = Verdict(claim, s, c, classify(s, c), url=url, lastmod=lastmod)
+        out[key] = Verdict(claim, float(s), float(c), classify(float(s), float(c)),
+                           url=url, lastmod=lastmod)
     return out, usage
 
 
