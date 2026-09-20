@@ -239,12 +239,15 @@ if __name__ == "__main__":
     confirmations = {}
     try:
         res = json.loads((out / "results.json").read_text())
-        for v in (res.get("abstained") or []) + (res.get("queue") or []):
-            pass
-        for v in res.get("confirmed_matches", []):
-            confirmations[v["resource_id"]] = {
-                f: res.get("generated_at") for f in v.get("fields", [])
-            }
+        when = res.get("generated_at")
+        for v in res.get("confirmed_matches") or []:
+            # A field-level finding names the field it checked; a whole-listing
+            # match confirms the contact details it had to read to get there.
+            fields = v.get("fields") or ["phone", "address", "schedule"]
+            confirmations[v["resource_id"]] = {f: when for f in fields}
+        if confirmations:
+            print(f"  {len(confirmations)} listing(s) confirmed against their "
+                  f"own source by the last run - counting as evidence")
     except (OSError, ValueError, KeyError):
         pass
 

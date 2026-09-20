@@ -275,6 +275,23 @@ def main():
         "stats": stats,
         "queue": queue,
         "abstained": abstained,
+        # A "match" is not a null result. The organisation's own site agreed
+        # with the stored value, which is a real confirmation and the single
+        # most common outcome of a run. Discarding it was throwing away most
+        # of the work: these feed freshness.py and are what makes the index
+        # move when the agent runs.
+        "confirmed_matches": [
+            {
+                "resource_id": v["resource_id"],
+                "name": v.get("name"),
+                "fields": [f["field"] for f in (v.get("fields") or [])],
+                "evidence_url": next(
+                    (f.get("evidence_url") for f in (v.get("fields") or [])
+                     if f.get("evidence_url")), None
+                ),
+            }
+            for v in verdicts if v["verdict"] == "match"
+        ],
         "contradictions": GQ.contradictions(g)[:15],
         "source": "https://www.sfserviceguide.org/api/v2 (public, read-only)",
     }
