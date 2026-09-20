@@ -250,22 +250,50 @@ def relates(claim: str) -> dict:
 
     Deliberately paired with, not replacing, the noul form: calibrate.py scores
     both against the same pages so the choice is made on measurements.
+
+    Criteria are STRUCTURED objects rather than prose, per
+    docs.typesafe.ai/primitives/advanced - and here that is not a style
+    preference, it is the single biggest measured win in experiment.py. Over
+    the same 444 rows, prose criteria surfaced 14 safe contradictions at >=0.99;
+    `what`/`not_for`/`examples` surfaced 25, still with zero false accusations.
+    The `not_for` key on `contradicts` is doing most of that work: it states
+    explicitly that silence is not disagreement, which is the boundary this
+    whole project keeps getting wrong.
+
+    Structured STATE, by contrast, measured no better (AUROC 0.987 vs 0.992) and
+    is not used - our state is one blob of page text with no relational
+    structure to preserve, which is not the case the docs' advice is about.
     """
     return {
         "type": "choice",
-        "instructions": (
-            "You are shown the text of a web page published by an organisation, "
-            "and a claim taken from a third-party directory listing about that "
-            "organisation. How does the page relate to the claim?\n\n"
-            f"Claim: {claim}"
-        ),
+        "instructions": {
+            "task": "Decide how the web page in the state relates to the claim.",
+            "claim": claim,
+            "context": "The page is published by the organisation itself. The "
+                       "claim comes from a third-party directory listing about "
+                       "that organisation.",
+        },
         "criteria": {
-            "supports": "The page states the claim, or directly implies it is true.",
-            "contradicts": "The page states the opposite of the claim, or implies "
-                           "it is false - for example by giving a different value "
-                           "for the same thing.",
-            "says_nothing": "The page does not address what the claim asserts, "
-                            "either way. It simply does not mention it.",
+            "supports": {
+                "what": "The page states the claim, or directly implies it is true.",
+                "examples": ["the same phone number appears on the page",
+                             "the same street address appears on the page",
+                             "the page describes the service the claim describes"],
+            },
+            "contradicts": {
+                "what": "The page gives a DIFFERENT value for the same thing, or "
+                        "states that the claim is false.",
+                "not_for": "The page simply not mentioning the subject. Silence "
+                           "is not disagreement - that is 'says_nothing'.",
+                "examples": ["the page lists a different main phone number",
+                             "the page says the programme has closed"],
+            },
+            "says_nothing": {
+                "what": "The page does not address what the claim asserts, either "
+                        "way. It simply does not mention it.",
+                "examples": ["no phone number anywhere on the page",
+                             "the page is about an unrelated programme"],
+            },
         },
     }
 

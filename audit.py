@@ -2,34 +2,39 @@
 
 The loop, end to end:
 
-    record  ->  claims       deterministic templates over structured fields
+    record  ->  claims       extract.py reads the WHOLE listing (cached), plus
+                             deterministic templates as an unremovable floor
             ->  inventory    discover.py: robots.txt -> sitemap -> lastmod
-            ->  shortlist    rank pages per field, no model involved
+            ->  shortlist    rank pages per field
             ->  fetch        top-k only, budgeted
-            ->  judge        jev.py: support AND contradict, per claim per page
+            ->  judge        jev.py: one three-way Choice per claim per page
             ->  reconcile    best evidence across pages wins
             ->  decide       supported / contradicted / absent / uncertain
 
 Three decisions in here are load-bearing, and each one exists because an
 earlier version got it wrong.
 
-1. CLAIMS ARE TEMPLATED, NOT GENERATED. Phones, addresses and schedules are
-   already structured. Turning `{"number": "510-808-7410"}` into "the
-   organisation can be reached on 510-808-7410" needs a format string, not a
-   language model. Generating them would add cost, latency, and a fresh way to
-   be wrong about data we can already read exactly. Only free prose
-   (eligibility, application process) needs a model, and that is a separate,
-   cached step.
+1. CLAIMS ARE READ, NOT PATTERN-MATCHED. An earlier version templated three
+   structured fields and stopped there, which reached about a tenth of what a
+   listing asserts - the corpus is mostly prose. On Building Futures that
+   produced 2 claims where reading the listing produces 19, and it missed the
+   organisation's 24-hour crisis line entirely, because that number lives in a
+   description paragraph and never reaches the structured phone data.
 
-2. ABSENCE IS NOT CONTRADICTION. Every claim gets two independent questions:
-   does the page SUPPORT this, and does the page CONTRADICT this. A page that
-   never mentions a phone number scores low on both - that is ABSENT and it is
-   not a finding. Only an active contradiction can reach a human. This is the
-   single rule that would have prevented most of what we have retracted.
+   Templates remain as a floor that cannot be removed: they are free,
+   deterministic, and a model having a bad day must not be able to silently
+   shrink our coverage.
+
+2. ABSENCE IS NOT CONTRADICTION. Each claim gets ONE three-way Choice -
+   supports / contradicts / says_nothing - so silence is an option the model
+   SELECTS rather than a state inferred by my code from two low probabilities.
+   Only an active contradiction can reach a human. This is the single rule that
+   would have prevented most of what this project has retracted, and the form
+   was chosen by measurement: see experiment.py.
 
 3. NOTHING HERE PUBLISHES. Output is a candidate for review. change_request
    payloads are written to disk and never POSTed. Every request this module
-   makes to a third party is a GET; the only POST is to the judgment model.
+   makes to a third party is a GET; the only POSTs are to the two models.
 
 Run it:  .venv/bin/python audit.py 2399
 """
@@ -41,11 +46,12 @@ import dataclasses
 import json
 
 import discover
+import extract
 import fetcher
 import jev
 
 UA = discover.UA
-MAX_PAGES_PER_ORG = 4          # fetch budget, per organisation
+MAX_PAGES_PER_ORG = 5          # fetch budget, per organisation
 PAGE_CHARS = 60_000            # per page, well inside Jev's context window
 
 
@@ -97,16 +103,53 @@ def _status_claim(record) -> list[Claim]:
     )]
 
 
-def extract_claims(record, include_prose: bool = False) -> list[Claim]:
-    """Testable statements from one listing. Deterministic - no model call.
+def template_claims(record) -> list[Claim]:
+    """Structured fields only, by format string. No model, never fails.
 
-    `include_prose` is a placeholder for the eligibility/application-process
-    path, which DOES need generation and is therefore cached separately. It is
-    off until that cache exists; shipping it half-built would mean paying model
-    cost on every run to produce claims we cannot yet reuse.
+    The floor, not the ceiling: phone, address and status are already
+    structured, so turning them into sentences needs a template, not a
+    language model. This is what runs when extraction is unavailable.
     """
-    claims = _phone_claims(record) + _address_claims(record) + _status_claim(record)
-    return claims
+    return _phone_claims(record) + _address_claims(record) + _status_claim(record)
+
+
+def extract_claims(record, use_model: bool = True) -> list[Claim]:
+    """Everything in the listing worth checking, not just the structured rows.
+
+    Templates reach three fields. The corpus is mostly prose - 3,340
+    long_descriptions, 3,308 eligibilities, 2,913 application processes - and
+    none of it is reachable by a format string. extract.py reads the whole
+    listing with a model, once per record version, cached against the record's
+    own `updated_at`.
+
+    The difference is not marginal. On Building Futures, templates produce 2
+    claims; extraction produces 19, including the organisation's 24-hour crisis
+    line 1-866-292-9688 - which appears nowhere in the structured phone data
+    and so was invisible to every check this project had before.
+
+    Falls back to templates when no key is set or the model is unreachable, so
+    the pipeline degrades rather than stopping. Templated claims are always
+    included: they are free, deterministic, and a model that drops one should
+    not be able to silently shrink our coverage.
+    """
+    base = template_claims(record)
+    if not use_model:
+        return base
+    try:
+        extracted = extract.extract(record)
+    except Exception:
+        return base
+    if not extracted:
+        return base
+
+    seen = {c.text.lower() for c in base}
+    for e in extracted:
+        if e.text.lower() in seen:
+            continue
+        seen.add(e.text.lower())
+        base.append(Claim(key=f"x{e.key}", field=e.field, text=e.text,
+                          stored=e.stored or e.text))
+    return base
 
 
 # --------------------------------------------------------------------------
@@ -131,24 +174,76 @@ def page_text(url: str) -> tuple[str, str | None]:
     return text[:PAGE_CHARS], method
 
 
+SHORTLIST = 40          # candidates handed to the judge, per field group
+
+
 def select_pages(inv: discover.Inventory, claims: list[Claim],
-                 budget: int = MAX_PAGES_PER_ORG) -> list[tuple[str, str | None]]:
+                 budget: int = MAX_PAGES_PER_ORG,
+                 use_model: bool = True) -> list[tuple[str, str | None]]:
     """Which pages to spend the fetch budget on.
 
-    Union of the top-ranked pages for each field present in the claim set, so a
-    listing with phones and an address looks at contact-shaped AND
-    location-shaped pages rather than four near-identical ones. The homepage is
-    always included: on small nonprofit sites it is often the only real page.
+    Two stages, and the split matters:
+
+      1. SHORTLIST, deterministic. Slug-keyword scoring in discover.rank_pages
+         narrows a 265-page sitemap to ~40 candidates. This is a cheap
+         prefilter, not a decision - the same role BM25 plays in TypeSafe's
+         re-ranking cookbook, where a fast lexical pass cuts 3,565 passages to
+         30 before the model ever looks.
+
+      2. SELECT, by model. Jev picks from those slugs. Keyword scoring is a
+         heuristic about what a URL probably means, and heuristics about
+         meaning are exactly what a judgment model is for. It cannot invent a
+         URL: every option is one discovery.py actually found.
+
+    Leaving stage 2 as keyword matching would have repeated, one layer up, the
+    mistake that SUBPAGES made - guessing at meaning instead of asking.
+
+    The homepage is always included: on small nonprofit sites it is often the
+    only real page, and it costs one slot to never be wrong about that.
+
+    Falls back to pure stage 1 when no key is set, so the pipeline still runs.
     """
     fields = list(dict.fromkeys(c.field for c in claims))
     picked: dict[str, str | None] = {}
     if inv.origin:
         picked[inv.origin.rstrip("/") + "/"] = None
+
+    lastmod = dict(inv.pages)
+
+    if use_model and jev.available() and len(inv) > budget:
+        shortlists = {f: inv.top(f, limit=SHORTLIST) for f in fields}
+        qs = {}
+        for f, cands in shortlists.items():
+            if len(cands) < 2:
+                continue
+            example = next((c.text for c in claims if c.field == f), f)
+            qs[f"pick__{f}"] = jev.best_page(example, [u for u, _ in cands])
+        if qs:
+            try:
+                # One request, one question per field group - questions against
+                # the same state run in parallel and cost only their own tokens.
+                answers, _ = jev.ask(
+                    json.dumps({"organisation": inv.website,
+                                "note": "Choose which page is most likely to "
+                                        "answer the claim."}), qs)
+                for f, cands in shortlists.items():
+                    pick, conf = jev.choice(answers, f"pick__{f}")
+                    if not pick or pick == "none" or not pick.startswith("u"):
+                        continue
+                    try:
+                        url = cands[int(pick[1:])][0]
+                    except (ValueError, IndexError):
+                        continue
+                    picked.setdefault(url, lastmod.get(url))
+            except jev.JevError:
+                pass              # fall through to the deterministic ordering
+
+    # Top up from the deterministic ranking, so the budget is always spent.
     for f in fields:
         for url, lm in inv.top(f, limit=3):
-            picked.setdefault(url, lm)
             if len(picked) >= budget:
                 break
+            picked.setdefault(url, lm)
         if len(picked) >= budget:
             break
     return list(picked.items())[:budget]
