@@ -94,7 +94,7 @@ def build_message(item):
     rid = item.get("resource_id")
     name = item.get("name", "Unknown org")
     text = (
-        f'SF Service Guide Watch — review #{rid}\n'
+        f'shelflife — review #{rid}\n'
         f'{name}\n'
         f'{field}: stored "{stored}" → live "{live}"\n'
         f"Source: {url}\n"
@@ -142,7 +142,7 @@ def main():
         print("Review queue is empty -- nothing to send.")
         return
 
-    print(f"{BOLD}{BLUE}SF Service Guide Watch → Spectrum (dry run){RESET}")
+    print(f"{BOLD}{BLUE}shelflife → Spectrum (dry run){RESET}")
     print(f"{DIM}No PHOTON_API_KEY set -- this is what would be sent.{RESET}")
     print(f"{DIM}{'─' * 78}{RESET}\n")
 

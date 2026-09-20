@@ -1,5 +1,5 @@
 /**
- * SF Service Guide Watch — the review session. Transport-agnostic.
+ * shelflife — the review session. Transport-agnostic.
  * ================================================================
  *
  * This module is the whole product: load the ranked review queue, hand a
@@ -54,7 +54,7 @@ export const FLAGGED_PATH = path.join(OUT_DIR, "flagged.json");
 
 /** Stamped onto every recorded outcome so the provenance is never ambiguous. */
 const NOT_SUBMITTED_NOTE =
-  "Recorded locally only. SF Service Guide Watch never POSTs to " +
+  "Recorded locally only. shelflife never POSTs to " +
   "sfserviceguide.org — a human must submit this.";
 
 // ---------------------------------------------------------------------------
@@ -702,7 +702,7 @@ export function reviewCard(
   affordances: Affordances = "text",
 ): string {
   const lines = [
-    `SF Service Guide Watch — review #${item.resourceId}`,
+    `shelflife — review #${item.resourceId}`,
     `Review ${position} of ${total}`,
     "",
     item.name,
@@ -866,7 +866,7 @@ export function outcomeMessage(item: ReviewItem, action: Action): string {
 }
 
 export const HELP_TEXT = [
-  "SF Service Guide Watch — commands",
+  "shelflife — commands",
   "",
   "When the agent proposes a change:",
   "  Y      yes, the listing should be changed",
@@ -883,7 +883,7 @@ export const HELP_TEXT = [
   "  help   this message",
   "  stop   end the session",
   "",
-  "SF Service Guide Watch never writes to sfserviceguide.org.",
+  "shelflife never writes to sfserviceguide.org.",
 ].join("\n");
 
 // ---------------------------------------------------------------------------
@@ -1189,11 +1189,11 @@ export class ReviewSession {
 
   async start(): Promise<void> {
     const intro = [
-      "SF Service Guide Watch",
+      "shelflife",
       "",
       "The SF Service Guide tells unhoused San Franciscans where to find food,",
-      "a shelter bed, a clinic, legal aid. Most of its listings have never been",
-      "checked since they were added — some are seven years old.",
+      "a shelter bed, a clinic, legal aid. It is actively maintained — but the",
+      "record shows only that a listing CHANGED, never that anyone confirmed it.",
       "",
       `A software agent re-checked ${this.queue.total} listing(s) against the`,
       "organisation's own website. It isn't trusted to decide alone, so for",

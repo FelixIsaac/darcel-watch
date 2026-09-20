@@ -101,7 +101,7 @@ def call_model(prompt, api_key):
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
                     "HTTP-Referer": "https://github.com/FelixIsaac/shelflife",
-                    "X-Title": "SF Service Guide Watch",
+                    "X-Title": "shelflife",
                 },
             )
             return resp["choices"][0]["message"]["content"]

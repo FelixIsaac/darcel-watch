@@ -262,7 +262,7 @@ later run. Skips are not persisted, because "skip" means *not me*, not *never*.
   "decided_via": "web",
   "decided_at": "2026-09-19T23:38:40.996Z",
   "submitted_to_askdarcel": false,
-  "note": "Recorded locally only. SF Service Guide Watch never POSTs to askdarcel.org — a human must submit this change request."
+  "note": "Recorded locally only. shelflife never POSTs to askdarcel.org — a human must submit this change request."
 }
 ```
 

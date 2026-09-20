@@ -1,5 +1,5 @@
 /**
-  * SF Service Guide Watch — the messaging transport.
+  * shelflife — the messaging transport.
  * =======================================
  *
  * Carries the review session (notify/session.ts) over Spectrum: the `terminal`

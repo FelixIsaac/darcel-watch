@@ -1,5 +1,5 @@
 /**
- * SF Service Guide Watch — the application server.
+ * shelflife — the application server.
  * ================================================
  *
  * One `node:http` server, no framework, no build step, no dependencies beyond
@@ -478,7 +478,7 @@ function sendFile(res: http.ServerResponse, file: string): boolean {
 
 function sendNotFound(res: http.ServerResponse, what: string): void {
   const body = `<!DOCTYPE html><html><head><meta charset="utf-8">
-<title>Not found — SF Service Guide Watch</title>
+<title>Not found — shelflife</title>
 <style>body{background:#0b0d10;color:#e8ecf1;font-family:-apple-system,BlinkMacSystemFont,
 "Segoe UI",Roboto,Helvetica,Arial,sans-serif;padding:48px 24px;line-height:1.6}
 a{color:#6fa8ff}code{color:#9aa5b1}</style></head><body>

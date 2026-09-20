@@ -1,4 +1,4 @@
-"""SF Service Guide Watch - end to end.
+"""shelflife - end to end.
 
   harvest -> triage -> verify -> adjudicate -> emit
 

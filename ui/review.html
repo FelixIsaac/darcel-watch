@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
-<title>Review queue — SF Service Guide Watch</title>
+<title>Review queue — shelflife</title>
 <style>
   /* Same palette as ui/index.html — these pages are one product. */
   :root{
@@ -207,7 +207,7 @@
 
 <header class="top">
   <div class="title-row">
-    <h1>SF Service Guide Watch</h1>
+    <h1>shelflife</h1>
     <span class="queue-pill" id="pill">loading…</span>
   </div>
   <p class="tagline">You are the human in the loop.</p>
@@ -231,7 +231,7 @@
   <p class="note">
     Confirmed changes are written to <strong>out/approved.json</strong>; your verifications to
     <strong>out/verified.json</strong>.<br>
-    SF Service Guide Watch never writes to sfserviceguide.org.
+    shelflife never writes to sfserviceguide.org.
   </p>
 </footer>
 
@@ -277,7 +277,7 @@
   function addRow(who, node) {
     var row = el("div", "row " + (who === "you" ? "out" : "in"));
     var stack = el("div", "stack");
-    stack.appendChild(el("div", "meta", who === "you" ? "You" : "SF Service Guide Watch"));
+    stack.appendChild(el("div", "meta", who === "you" ? "You" : "shelflife"));
     stack.appendChild(node);
     row.appendChild(stack);
     thread.appendChild(row);
