@@ -704,32 +704,48 @@ def verify(record, api_key=None):
     name = record.get("name", "")
     website = record.get("website")
 
-    if not website:
+    # TIER 1 FIRST. This reads the stored value and nothing else - no network,
+    # no model, and it cannot false-positive. Running it before the fetch is
+    # not an optimisation, it is the difference between finding these defects
+    # and not: an earlier version ran it last, so any listing whose website was
+    # unreachable or JS-only had its structural check skipped entirely. That was
+    # 15 of 23 abstentions - every one of them a listing we could have judged
+    # for free, silently dropped because an unrelated, expensive step failed.
+    structural = check_phone_format(record)
+
+    def early(reason, confidence, fetched=()):
+        """Abstain on the live-source question, but keep any Tier 1 finding."""
+        if structural:
+            return {
+                "resource_id": rid, "name": name, "verdict": "discrepancy",
+                "reason": structural["stored"], "confidence": 0.95,
+                "fetched": list(fetched), "fields": [structural],
+                "listing_url": listing_url(rid), "listing_edit_url": edit_url(record),
+                "org_website": website,
+                "change_request": build_change_request(record, [structural], "discrepancy"),
+            }
         return {
             "resource_id": rid, "name": name, "verdict": "abstain",
-            "reason": "no website on file", "confidence": 1.0,
-            "fetched": [], "fields": [], "change_request": None,
+            "reason": reason, "confidence": confidence,
+            "fetched": list(fetched), "fields": [], "change_request": None,
         }
+
+    if not website:
+        return early("no website on file", 1.0)
 
     try:
         texts, fetched = gather_evidence(website)
     except Exception as e:
-        return {
-            "resource_id": rid, "name": name, "verdict": "abstain",
-            "reason": f"fetch failed: {e}", "confidence": 0.0,
-            "fetched": [], "fields": [], "change_request": None,
-        }
+        return early(f"fetch failed: {e}", 0.0)
 
     if not texts:
-        return {
-            "resource_id": rid, "name": name, "verdict": "abstain",
-            "reason": "site unreachable or JS-only shell with no readable text",
-            "confidence": 0.2, "fetched": fetched, "fields": [], "change_request": None,
-        }
+        return early(
+            "site unreachable or JS-only shell with no readable text", 0.2, fetched
+        )
 
     findings = [f for f in (
         check_phone(record, texts), check_closure(texts), check_address(record, texts),
-        check_phone_format(record),
+        structural,
     ) if f]
 
     result = None
