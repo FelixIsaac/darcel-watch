@@ -144,23 +144,10 @@ def edit_url(record):
     return record.get("service_edit_url") or listing_edit_url(record.get("id"))
 
 
-EXT_RE = re.compile(r"(?i)\b(?:ext\.?|extension|x)\b.*$")
-
-
-def phone_digits(p):
-    """Digits of the dialable part, with any trailing extension dropped.
-
-    v2 renders extensions inline - "(510) 654-4000 ext. 105" - so naively
-    stripping non-digits yields 5106544000105 and taking the last 10 gives
-    6544000105, a number that belongs to nobody. Cut at the ext marker first.
-    """
-    return re.sub(r"\D+", "", EXT_RE.sub("", p or ""))
-
-
-def norm_phone(p):
-    """Last 10 digits - area code + number, ignores formatting/country code."""
-    d = phone_digits(p)
-    return d[-10:] if len(d) >= 10 else None
+# Phone/address normalisation lives in normalize.py because the graph backends
+# key their phone and address nodes on exactly these functions - a second copy
+# drifts silently. Re-exported here: agent.py calls verify.norm_phone.
+from normalize import norm_phone, phone_digits  # noqa: E402,F401
 
 
 def text_from_html(raw):
@@ -352,12 +339,15 @@ def check_phone_format(record):
     }
 
 
-# A page has to carry real content before its silence means anything. Measured
-# on the corpus, the listings this check first flagged had a median of 17.5k
-# characters but a long tail down to 423 - and every one of those thin ones was
-# a JavaScript shell whose address we simply had not rendered. Callers must
-# render before concluding absence (see fetcher.render_fetch).
-MIN_IDENTITY_CHARS = 1200
+# Identity anchors are used one way only: to confirm a fetched page IS this
+# listing's, before any discrepancy found on it is believed.
+#
+# There used to be a check that reported the inverse - "none of this listing's
+# anchors appear on its website, so the website is probably not theirs" - as a
+# finding. It is not shipped, deliberately: the count fell 53 -> 32 -> 18 as the
+# crawler got better at rendering JS shells, which means it was measuring our
+# crawl depth, not the directory's errors. An absence is only evidence once you
+# can prove you looked properly, and we cannot.
 
 
 def identity_anchors(record):
@@ -403,69 +393,6 @@ def find_identity_anchor(record, texts):
             if value.lower() in low:
                 return kind, value, url
     return None
-
-
-def check_website_identity(record, texts):
-    """The website on file may not be this organisation's website at all.
-
-    Two real examples from the corpus, both user-facing:
-
-        Getting Out & Staying Out   1485 Bayshore Blvd, San Francisco 94124
-                                    website gosonyc.org -> a New York charity
-        Goodwill Industries of
-        the Greater East Bay        10800 International Blvd, Oakland
-                                    website sfgoodwill.org -> a different entity
-
-    A San Franciscan looking for reentry support clicks through to New York.
-    No model is needed to see it: fetch the site and ask whether ANY of this
-    listing's addresses or phone numbers appear on it. If none do, the site
-    probably is not theirs.
-
-    Three conditions have to hold before this is reported, because each of them
-    was a way to be wrong:
-
-      1. We have something to look for. A listing with no address and no phone
-         cannot corroborate anything, so it is skipped rather than accused.
-      2. We actually READ a page. A site that 403s, times out, or returns a JS
-         shell with no text mentions nothing at all - that is our failure, not
-         the listing's, and reporting it would drown the real ones.
-      3. Nothing matched anywhere across every page fetched.
-
-    The evidence here is an absence, so the finding records what was looked for
-    rather than a quote. A volunteer checks it by opening the site and using
-    their eyes, which takes about ten seconds.
-    """
-    website = record.get("website")
-    if not website:
-        return None
-
-    phones, places = identity_anchors(record)
-    if not phones and not places:
-        return None  # nothing to corroborate against
-
-    readable = {u: t for u, t in (texts or {}).items() if t and len(t) >= MIN_IDENTITY_CHARS}
-    if not readable:
-        return None  # unreachable or JS-only: our problem, not a finding
-
-    if find_identity_anchor(record, readable):
-        return None
-
-    looked_for = [f"phone {p}" for p in phones] + [f"{k} {v!r}" for k, v in places]
-    summary = ", ".join(looked_for[:6])
-    return {
-        "field": "website_identity",
-        "stored": website,
-        "live": "none of this listing's addresses or phone numbers appear on that site",
-        "evidence_url": website,
-        "evidence_quote": (
-            f"Fetched {len(readable)} page(s) on {website} and found none of: {summary}. "
-            "The website on file may belong to a different organisation."
-        ),
-        "match": False,
-        "structural": True,
-        "checked_pages": sorted(readable),
-        "looked_for": looked_for,
-    }
 
 
 def check_closure(texts):
@@ -525,7 +452,6 @@ def adjudicate_deterministic(record, findings, texts, fetched):
         return "discrepancy", f"Live site language suggests closure/relocation: \"{closure['evidence_quote']}\"", 0.7
 
     phone = next((f for f in findings if f["field"] == "phone"), None)
-    mismatches = [f for f in findings if f.get("match") is False]
     if phone and phone["match"] is False:
         return ("discrepancy",
                 f"Stored phone {phone['stored']} not found on site; live number {phone['live']} shown instead.",
@@ -784,10 +710,32 @@ def verify(record, api_key=None):
 
 
 def verify_many(records, api_key=None, workers=6):
-    """Fan out verify() over ThreadPoolExecutor - network-bound, so threads are fine."""
+    """Fan out verify() over ThreadPoolExecutor - network-bound, so threads are fine.
+
+    verify() promises never to raise, but a malformed record can still trip a
+    check that sits outside its try (or build_change_request). Re-raising here
+    would throw away every other record's network work for one bad row, so a
+    failure is caught per future and returned as that record's abstention: one
+    bad record costs one record.
+    """
     with cf.ThreadPoolExecutor(workers) as ex:
-        futs = [ex.submit(verify, r, api_key) for r in records]
-        return [f.result() for f in futs]
+        futs = [(r, ex.submit(verify, r, api_key)) for r in records]
+        out = []
+        for record, f in futs:
+            try:
+                out.append(f.result())
+            except Exception as e:
+                out.append({
+                    "resource_id": record.get("id"),
+                    "name": record.get("name", ""),
+                    "verdict": "abstain",
+                    "reason": f"verifier crashed on this record: {type(e).__name__}: {e}",
+                    "confidence": 0.0,
+                    "fetched": [],
+                    "fields": [],
+                    "change_request": None,
+                })
+        return out
 
 
 if __name__ == "__main__":

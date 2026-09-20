@@ -418,9 +418,11 @@ def _identity_anchor(record, session):
     """Do the fetched pages corroborate that they are about THIS listing?
 
     Thin wrapper over verify.find_identity_anchor so the agent and the
-    deterministic check share one definition of "this page is theirs". The
-    agent uses it to refuse a discrepancy; verify.check_website_identity uses
-    the same anchors to report the listing itself as broken.
+    deterministic path share one definition of "this page is theirs". It is a
+    guard only - the agent uses it to refuse a discrepancy found on a page it
+    cannot tie to this listing. The inverse ("no anchors, so the website is
+    wrong") is deliberately not reported as a finding; see the note above
+    verify.identity_anchors.
     """
     return verify.find_identity_anchor(record, session.pages) is not None
 

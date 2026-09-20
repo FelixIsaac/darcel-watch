@@ -13,23 +13,12 @@ dict IS the right data structure. FalkorDB/Cypher is the drop-in for real scale
 (see README) - same model, same queries.
 """
 
-import re
 from collections import defaultdict
 
-NORM_PHONE = re.compile(r"\D+")
-
-
-def norm_phone(p):
-    d = NORM_PHONE.sub("", p or "")
-    return d[-10:] if len(d) >= 10 else None
-
-
-def norm_addr(a):
-    if not a:
-        return None
-    s = " ".join(str(a.get(k) or "") for k in ("address_1", "city", "postal_code"))
-    s = re.sub(r"[^a-z0-9 ]", "", s.lower())
-    return re.sub(r"\s+", " ", s).strip() or None
+# One definition of "same phone" / "same address", shared with verify.py. A
+# private copy here used to miss extensions, which split a switchboard across
+# two phone nodes and hid the contradiction.
+from normalize import norm_addr, norm_phone  # noqa: F401  (re-exported)
 
 
 class Graph:
@@ -67,8 +56,7 @@ def build(records):
             verified_at=r.get("verified_at"),
             certified_at=r.get("certified_at"),
             updated_at=r.get("updated_at"),
-            schedule=r.get("schedule"),
-            raw_id=r["id"],
+            raw_id=str(r["id"]),
         )
 
         for s in r.get("services") or []:
@@ -118,7 +106,7 @@ def contradictions(g):
     for nid, node in g.nodes.items():
         if node["kind"] not in ("phone", "address"):
             continue
-        orgs = g.neighbors(nid)
+        orgs = sorted(g.neighbors(nid))
         if len(orgs) > 1:
             names = {g.nodes[o]["name"] for o in orgs}
             if len(names) > 1:
@@ -129,7 +117,11 @@ def contradictions(g):
                         "orgs": [{"id": o, "name": g.nodes[o]["name"]} for o in orgs],
                     }
                 )
-    return sorted(out, key=lambda c: -len(c["orgs"]))
+    # Total order, not just by size. run.py publishes the top 15 and ~14 entries
+    # tie at size 4 right at that cut, so a size-only sort let the two backends
+    # emit different out/results.json from the same data. `shared` breaks the tie
+    # in both backends; org lists are sorted by id so the rows are byte-equal.
+    return sorted(out, key=lambda c: (-len(c["orgs"]), c["shared"]))
 
 
 def propagate_staleness(g, seeds, decay=0.5, hops=2):

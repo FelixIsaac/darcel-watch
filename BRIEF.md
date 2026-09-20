@@ -162,7 +162,7 @@ the in-memory graph.
 | `run.py` | Orchestrator. Emits `out/results.json` and `out/graph.json`. |
 | `freshness.py` | The decay model. Emits `out/freshness.json`. |
 | `graph.py` / `graph_falkor.py` | In-memory and FalkorDB backends, same interface. |
-| `crosscheck.py` | Proves the two graph backends agree. Zero mismatches across 156 orgs, hops 1–4. |
+| `crosscheck.py` | Asserts the two graph backends agree over the whole corpus: 816 orgs, all 230 contradictions in published order, subgraph export. Exits non-zero on any mismatch. |
 | `notify/session.ts` | The review state machine. Transport-agnostic. |
 | `notify/web.ts` | The application server. Four pages, 11 routes, live audit over SSE. |
 | `notify/spectrum.ts` | Real Spectrum client — terminal works, iMessage does not deliver. |

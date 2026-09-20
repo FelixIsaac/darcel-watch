@@ -230,11 +230,16 @@ def blast_radius(g, org_id):
 def contradictions(g):
     """Distinct orgs sharing a phone or address - merge candidates or stale data."""
     rows = g.query(CONTRADICTIONS).result_set
+    # ORDER BY in the query fixes the row order; orgs within a row come back in
+    # collect() order, so they are sorted by id here to match graph.py exactly.
     return [
         {
             "shared": r[0],
             "kind": r[1],
-            "orgs": [{"id": o["id"], "name": o["name"]} for o in r[2]],
+            "orgs": sorted(
+                ({"id": o["id"], "name": o["name"]} for o in r[2]),
+                key=lambda o: o["id"],
+            ),
         }
         for r in rows
     ]

@@ -126,11 +126,14 @@ findings on the current run.
 Yes — FalkorDB, running in Docker, queried with real Cypher. Blast radius is a
 traversal, contradictions are a pattern match, staleness is a variable-length path.
 We also kept an in-memory implementation and wrote `crosscheck.py` to prove they
-agree: 156 orgs, every contradiction, staleness at hops 1–4 — zero mismatches. That
-cross-check caught a real divergence (our BFS could reuse an edge; Cypher forbids
-it), which is how we know the port is faithful rather than merely passing.
+agree: the whole corpus — 816 orgs, all 230 contradictions in published order,
+staleness from every org, the subgraph export — asserted, exits non-zero on any
+mismatch. That cross-check caught a real divergence (our BFS can reuse an edge;
+Cypher forbids it inside one path). We kept the in-memory semantics and made the
+Cypher reproduce them with an explicit second query, so the parity claim says
+which backend defines the answer rather than hiding it.
 
-**"Why a graph database at 1,158 nodes? A dict would do."**
+**"Why a graph database at 7,405 nodes? A dict would do."**
 At this size, yes — and we say so. The in-memory version is the fallback and it's
 genuinely fine. The argument is the queries, not the scale: they're traversals, and
 they stay traversals at 1,759 orgs or ten times that.
