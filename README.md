@@ -41,32 +41,32 @@ NOT dialable as stored    : 24  (13%)
 listings affected         : 19 of 138
 ```
 
-Twenty of those numbers are stored with the area code stripped off — too short to dial. Real examples from the sample:
+Twenty of those numbers are stored with the area code stripped off — too short to dial. The clearest single example: **MKL Rehab – Addiction Treatment Helpline** (#2514) has `94410046` on file — 8 digits, truncated, cannot be dialled. An addiction treatment helpline whose phone number does not work. No model was involved in finding this — it's a digit count.
 
-| Stored (undialable) | Organisation | Label |
-|---|---|---|
-| `08741653` | Oakland Housing Authority | Voice |
-| `02678800` | Alameda County Family Justice Center | Phone |
-| `82177080` | Foster Care Mental Health | Phone |
-| `05621141` | Teen Challenge Oakland Men's Center | Main |
-| `07779560` | Meals on Wheels of Alameda County | Main Line |
-| `02508000` | Oakland Healthcare & Wellness | Phone |
+A family justice centre appears in the same broken-number set (Alameda County Family Justice Center, `02678800`, domestic violence services) — a phone number nobody can call.
 
-A family justice centre — domestic violence services — with a phone number nobody can call.
+This check needs no model, no scraping, no judgment call. It's arithmetic on digit counts, so unlike our model-based findings below, it cannot produce a false positive. That contrast is the argument for the whole design: use the cheap deterministic check where it's sufficient on its own, and reserve the model for the genuine judgment calls a digit count can't make.
 
-This check needs no model, no scraping, no judgment call. It's arithmetic on digit counts, so unlike our model-based findings below, it cannot produce a false positive. That contrast is the argument for the whole design: use the cheap deterministic check where it's sufficient on its own, and reserve the model for the genuine judgment calls a digit count can't make (is this live number actually a replacement, or a careers line?).
+### The live run: structural checks carry the confident findings, the model mostly abstains
 
-### The Gemini-adjudicated run
+At `BUDGET=25`, the current run produces **2 discrepancies, 10 abstentions**. Both discrepancies are structural (`phone_format`) — the same digit-count check as above, not a model judgment:
 
-A live run with Gemini adjudication checked the 15 highest-triage-priority listings: **1 discrepancy, 7 abstained, 7 matched.** The one confirmed discrepancy: **Oakland Healthcare & Wellness** — stored `02508000` (8 digits, undialable), live site `510.250.8000`. Gemini confidence 0.95. The model-based phone check is more conservative than the count above on purpose — see the third bug below.
+| Org | ID | Stored | Issue |
+|---|---|---|---|
+| MKL Rehab – Addiction Treatment Helpline | #2514 | `94410046` | 8 digits, truncated |
+| Oakland Healthcare & Wellness | #2312 | `02508000` | 8 digits, truncated |
+
+Every model-adjudicated finding in this run came back **abstain**. That includes a listing where the regex evidence-gatherer found what looked like a phone number on the org's page but it was actually a Zoom meeting ID (Grassroots Open Assistive Tech, #2599) — the model declined to treat it as a phone match or mismatch, rather than guessing.
+
+We're stating this plainly because it's the designed outcome, not a limitation: we tightened the adjudication prompt twice specifically to make it more conservative (see the bugs below), and on this sample its judgment on genuinely ambiguous scraped evidence is overwhelmingly "I can't tell — ask a human." The cheap structural check carries the confident findings. The model's job is judgment, and abstaining on ambiguous evidence is the model doing that job correctly, not failing at it.
 
 ### Three of our own bugs, caught by looking, none by tests
 
 **1. A false positive in the model's judgment.** The first version of the adjudication prompt flagged Sutter Health for a phone mismatch: stored `800-478-8837`, live page showed `916-297-9000`, confidence 1.0. Reading the actual quote, that number came off a careers page — a hiring line, not a replacement for the main number. The model was right that the numbers differed and wrong that the difference meant anything. We rewrote the prompt to judge purpose, not just difference: it now has to decide whether the live number plausibly replaces the stored one for the *same* purpose, and to abstain when the surrounding text suggests a different one — careers, fax, donations, a department, a second location. After the fix, Sutter Health correctly abstains: *"The live number is presented in the context of a hiring process, which is a different purpose."*
 
-**2. A self-referential bug in our own code.** Oakland Healthcare & Wellness was initially shown to a reviewer as a discrepancy: `address: stored "3030 Webster St. Oakland 94609" → live "3030 Webster St. Oakland 94609"` — a proposed change to the exact same value. The adjudicator had reasoned about a field (phone) that no gathered evidence actually covered, and `build_change_request` fell through to whatever finding was first available, regardless of whether it genuinely differed. Fixed by requiring a field to actually differ before it's emitted at all, and downgrading to abstain when nothing gathered is actionable.
+**2. A self-referential bug in our own code.** Oakland Healthcare & Wellness was, in an earlier run, shown to a reviewer as a discrepancy on its *address*: `stored "3030 Webster St. Oakland 94609" → live "3030 Webster St. Oakland 94609"` — a proposed change to the exact same value. The adjudicator had reasoned about a field (phone) that no gathered evidence actually covered, and `build_change_request` fell through to whatever finding was first available, regardless of whether it genuinely differed. Fixed by requiring a field to actually differ before it's emitted at all, and downgrading to abstain when nothing gathered is actionable.
 
-**3. A false positive in our headline finding, caught by a human.** We first flagged Meals on Wheels of Alameda County for a phone mismatch — stored `5106544000105`, live site `510.777.9560` — and proposed replacing the stored number. A human opened the actual listing. The site already lists `(510) 777-9560` as its Main Line. The listing carries ten phone numbers, one per programme or region, and `5106544000105` is `(510) 654-4000 ext. 105` — the J-Sei Nutrition Services line, correctly stored. We had proposed replacing a correct number with one that was already present, because `check_phone` only ever compared the *first* stored number: it skipped the (differently malformed) main line and compared against the second number in the list, never checking the other nine. Fixed two ways: compare against every stored number, and when a listing has many numbers and none match, report the site's number as a possible *addition* rather than proposing to replace an arbitrary one.
+**3. A false positive caught by a human, not by us.** In an earlier run we flagged Meals on Wheels of Alameda County (#2258) for a phone mismatch — stored `5106544000105`, live site `510.777.9560` — and proposed replacing the stored number. A human opened the actual listing. The site already lists `(510) 777-9560` as its Main Line. The listing carries nine phone numbers, one per programme or region, and `5106544000105` is `(510) 654-4000 ext. 105` — the J-Sei Nutrition Services line, correctly stored. We had proposed replacing a correct number with one that was already present, because `check_phone` only ever compared the *first* stored number and never checked the other eight. Fixed by comparing against every stored number, and reporting an unmatched live number as a possible *addition* rather than a replacement when a listing carries many numbers. Meals on Wheels is no longer flagged as a discrepancy — it now correctly abstains (`phone_missing`: the live number isn't among the ones on file, which isn't the same as a stored number being wrong).
 
 This third bug is the strongest argument for the human-in-the-loop design in this whole project: **the human in our loop caught the agent, exactly as designed.** Nothing here shipped straight to ShelterTech — every output is a candidate, and this is what "candidate" is for.
 
@@ -131,7 +131,7 @@ python3 -m http.server 8000
 - **Deterministic evidence, model judgment.** Regex and string matching gather candidate evidence (phone numbers, closure phrases, zip codes). Gemini's only job is judging whether that evidence actually settles the question, and it's explicitly told to abstain rather than guess.
 - **Abstention is a headline metric, not a bug we hide.** If the site is unreachable, JS-only, or the evidence is ambiguous, the verdict is "abstain" and it's reported as such.
 - **Every claim carries a source URL and a verbatim quote.** No quote, no claim.
-- **The graph is in-memory, on purpose.** A directory of 1,759 orgs fits comfortably in an adjacency dict — that's the right data structure at this scale, zero dependencies. FalkorDB + Cypher is the drop-in at real scale: same model (Org→Service→Category, Org→Address, Org→Phone), same three queries (`blast_radius`, `contradictions`, `propagate_staleness`). We did not use FalkorDB in this build — honesty is the point of this project, and we'd rather say what we actually shipped.
+- **The graph runs on FalkorDB, with an in-memory fallback.** `graph_falkor.py` queries a real FalkorDB instance in Docker using Cypher: `blast_radius` is a traversal, `contradictions` a pattern match, `propagate_staleness` a variable-length path. `graph.py` is a zero-dependency adjacency implementation used when the database is unreachable, so the pipeline never hard-fails. `crosscheck.py` proves the two agree — 156 orgs, every contradiction, staleness at hops 1–4, subgraph extraction: zero mismatches. That cross-check earned its keep: it caught a genuine divergence (our BFS could cross the same edge twice; Cypher enforces relationship uniqueness and forbids it), which we reproduced deliberately rather than papering over. At 1,158 nodes an adjacency dict would be perfectly adequate — the argument for the graph database is that these are traversals, and they stay traversals as the corpus grows.
 - **We are not building a 16th directory.** ShelterTech's guide, chatbot, and phone line already exist and are used by ~16,000 people a month. This tool reduces the cost of keeping their existing system accurate; it doesn't replace it.
 
 ## Limitations

@@ -179,13 +179,22 @@ function url(v: unknown): string {
  * listing's phone_missing". The suffix describes the finding, which the review
  * already states in words, so it is dropped and underscores become spaces.
  */
+const FIELD_WORDS: Record<string, string> = {
+  phone: "phone number",
+  address: "address",
+  hours: "opening hours",
+  website: "website",
+  email: "email address",
+  operating_status: "open/closed status",
+  listing: "listing",
+};
+
 export function fieldLabel(field: string): string {
-  return (
+  const base =
     field
       .replace(/_(missing|mismatch|notfound|not_found|changed|stale)$/i, "")
-      .replace(/_/g, " ")
-      .trim() || field
-  );
+      .trim() || field;
+  return FIELD_WORDS[base] ?? base.replace(/_/g, " ");
 }
 
 /** "feedingseniors.org" — what to label the live side with. */

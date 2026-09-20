@@ -166,12 +166,49 @@ function recordedCounts(): Record<string, number> {
   return counts;
 }
 
+/**
+ * How many listings are actually reviewable right now.
+ *
+ * Counting `results.queue` alone answers "how many discrepancies", which is a
+ * different and much smaller number — a run can produce zero discrepancies and
+ * eight abstentions, and reporting that as an empty queue is both wrong and
+ * alarming. Abstentions are reviews; they just ask a different question.
+ */
+function queueBreakdown(): Record<string, number> {
+  let discrepancies = 0;
+  let abstentions = 0;
+  for (const item of lastLoad.items) {
+    if (item.kind === "discrepancy") discrepancies++;
+    else abstentions++;
+  }
+  return {
+    reviewable: queue.total,
+    remaining: queue.remaining,
+    discrepancies,
+    abstentions,
+    already_answered: lastLoad.alreadyDecided,
+  };
+}
+
+/** One truthful line about the queue, for the server log. */
+function logQueueBanner(): void {
+  const b = queueBreakdown();
+  if (b.reviewable === 0) {
+    console.log(`[sfsg-watch] ${lastLoad.emptyReason ?? "nothing to review"}`);
+    return;
+  }
+  console.log(
+    `[sfsg-watch] ${b.reviewable} review(s) ready ` +
+      `(${b.discrepancies} proposed change(s), ${b.abstentions} unverified)`,
+  );
+}
+
 function statePayload(): Record<string, unknown> {
   const decisions: Record<string, { action: string; at: string }> = {};
   for (const [id, d] of loadDecisions()) {
     decisions[id] = { action: d.action, at: d.at };
   }
-  return { decisions, counts: recordedCounts() };
+  return { decisions, counts: recordedCounts(), queue: queueBreakdown() };
 }
 
 // ---------------------------------------------------------------------------
@@ -279,6 +316,7 @@ function startRun(budget: number): { started: boolean; error?: string } {
     }
     // Fresh results mean a fresh queue, without restarting the server.
     rebuildQueue();
+    logQueueBanner();
     broadcast({ done: true, ok, ...(note ? { error: note } : {}) });
     for (const res of run.listeners) {
       try {
@@ -546,6 +584,10 @@ const server = http.createServer((req, res) => {
       }
 
       if (method === "GET" && pathname === "/api/run/stream") {
+        // HEADERS FIRST, before anything that could possibly throw. If the
+        // replay or the run state blew up after this point, the client would
+        // still have a valid 200 event-stream and would see an error frame
+        // rather than a destroyed socket with no status line at all.
         res.writeHead(200, {
           "content-type": "text/event-stream; charset=utf-8",
           "cache-control": "no-store",
@@ -553,11 +595,26 @@ const server = http.createServer((req, res) => {
           // Proxies that buffer would defeat the entire point of this route.
           "x-accel-buffering": "no",
         });
+        // Push the headers out now rather than waiting for the first body
+        // write, so a subscriber attached to an idle run still gets a
+        // response immediately.
+        res.flushHeaders?.();
 
-        // Replay what's already happened, so a late subscriber sees the run
-        // from the start rather than joining mid-way.
-        for (const line of run.lines) {
-          res.write(sseFrame({ line, stream: "stdout" }));
+        // A comment frame (ignored by EventSource) proves the connection is
+        // alive while a run is producing no output yet.
+        res.write(": connected\n\n");
+
+        try {
+          // Replay what's already happened, so a late subscriber sees the run
+          // from the start rather than joining mid-way.
+          for (const line of run.lines) {
+            res.write(sseFrame({ line, stream: "stdout" }));
+          }
+        } catch (err) {
+          console.error(`[sfsg-watch] SSE replay failed: ${String(err)}`);
+          res.write(sseFrame({ done: true, ok: false, error: String(err) }));
+          res.end();
+          return;
         }
 
         if (run.done) {
@@ -573,7 +630,25 @@ const server = http.createServer((req, res) => {
         }
 
         run.listeners.add(res);
-        req.on("close", () => run.listeners.delete(res));
+
+        // Keep the connection demonstrably alive during long silent stretches
+        // (the agent can spend 20s fetching one site without printing).
+        const heartbeat = setInterval(() => {
+          try {
+            res.write(": ping\n\n");
+          } catch {
+            clearInterval(heartbeat);
+            run.listeners.delete(res);
+          }
+        }, 15_000);
+        heartbeat.unref();
+
+        // A client hanging up only detaches that client. It must never touch
+        // the run itself — the pipeline outlives every individual request.
+        req.on("close", () => {
+          clearInterval(heartbeat);
+          run.listeners.delete(res);
+        });
         return;
       }
 
@@ -588,11 +663,44 @@ const server = http.createServer((req, res) => {
   })();
 });
 
+/**
+ * Never die silently.
+ *
+ * A throw that escaped a request handler used to take the process down with no
+ * explanation, which is exactly the situation where the log matters most. The
+ * server keeps running: one bad request must not end a demo.
+ */
+process.on("uncaughtException", (err) => {
+  console.error(`[sfsg-watch] UNCAUGHT: ${err instanceof Error ? err.stack : String(err)}`);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error(
+    `[sfsg-watch] UNHANDLED REJECTION: ${reason instanceof Error ? reason.stack : String(reason)}`,
+  );
+});
+
+server.on("clientError", (err, socket) => {
+  console.error(`[sfsg-watch] client error: ${err.message}`);
+  if (socket.writable) socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
+});
+
+server.on("error", (err) => {
+  // The common one is EADDRINUSE — an older server still holding the port.
+  // Saying so beats a stack trace nobody reads.
+  const e = err as NodeJS.ErrnoException;
+  if (e.code === "EADDRINUSE") {
+    console.error(
+      `[sfsg-watch] port ${PORT} is already in use — another server is still ` +
+        `running. Stop it first:  pkill -f notify/web.ts`,
+    );
+    process.exit(1);
+  }
+  console.error(`[sfsg-watch] server error: ${err.message}`);
+});
+
 server.listen(PORT, HOST, () => {
   const base = `http://${HOST}:${PORT}`;
-  console.log(
-    `[sfsg-watch] ${lastLoad.emptyReason ? lastLoad.emptyReason : `${queue.total} review(s) ready`}`,
-  );
+  logQueueBanner();
   console.log(`[sfsg-watch] dashboard  ${base}/`);
   console.log(`[sfsg-watch] review     ${base}/review`);
   console.log(`[sfsg-watch] graph      ${base}/graph`);

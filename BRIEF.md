@@ -95,7 +95,13 @@ flowchart LR
 | `run.py` | Orchestrator: harvest → triage → verify → rank → emit `out/results.json`. |
 | `ui/index.html` | Static review queue. No framework, no build step. Falls back to embedded demo data so it never renders blank. |
 | `notify/dry_run.py` | Renders the volunteer's iMessage conversation in the terminal. **This is what you demo.** |
-| `notify/spectrum.ts` | Photon/Spectrum integration. Scaffolding — has `// TODO verify against docs` markers. Do not demo this. |
+| `notify/session.ts` | The review state machine. Transport-agnostic — knows nothing about HTTP or Spectrum. |
+| `notify/web.ts` | The application server on :8787. Serves all three pages and the API, spawns audit runs, streams progress over SSE. |
+| `notify/spectrum.ts` | Real Spectrum client. Terminal transport works with no credentials; iMessage is wired but undelivered. |
+| `ui/review.html` | The review thread. |
+| `ui/graph.html` | Graph explorer — click an org to see its blast radius. |
+| `graph_falkor.py` | FalkorDB backend. Real Cypher. |
+| `crosscheck.py` | Parity harness proving both graph backends agree. |
 
 ### The agentic loop (`verify.py`)
 
@@ -125,8 +131,11 @@ Ranking: `priority = confidence * (1 + blast_radius_size * 0.15)`. Confidence
 alone is a bad rank; a wrong record invalidating twelve services deserves a
 volunteer's attention before a high-confidence typo.
 
-**We ship an in-memory adjacency graph. FalkorDB + Cypher is the drop-in at real
-scale — same model, same three queries. We do not claim to have used FalkorDB.**
+**The graph runs on FalkorDB (Docker, Cypher) via `graph_falkor.py`, with
+`graph.py` as a zero-dependency fallback when the database is unreachable.
+`crosscheck.py` proves they agree — 156 orgs, every contradiction, hops 1-4,
+subgraph extraction, zero mismatches. Run the pipeline with `.venv/bin/python`
+or the FalkorDB client isn't importable and it silently falls back.**
 
 ### Triage (`run.py`)
 
@@ -140,17 +149,20 @@ classical step guards the expensive model step.
 
 ```bash
 cd ~/Projects/darcel-watch
-
-# Adjudication on Gemini 2.5 Flash via OpenRouter:
+docker start falkordb
 export OPENROUTER_API_KEY=sk-or-...
-BUDGET=12 python3 run.py
-
-# Then, in two other terminals:
-python3 -m http.server 8777      # UI at localhost:8777/ui/index.html
-python3 notify/dry_run.py        # the iMessage handoff
+npm run web                      # everything at http://127.0.0.1:8787/
 ```
 
-Python 3, **standard library only**. No pip install, no npm, no build step.
+Dashboard, review queue and graph explorer are all served from that one URL, and
+the Run button triggers a live audit streamed over SSE.
+
+To run the pipeline directly: `BUDGET=25 .venv/bin/python run.py`. Use the venv
+interpreter — the FalkorDB client isn't installed system-wide, and plain `python3`
+silently falls back to the in-memory graph.
+
+**Start the server without `OPENROUTER_API_KEY` and the Run button quietly
+degrades to evidence-only mode.** No error, just no Gemini.
 
 Model transport auto-detects from the key: `sk-or-…` → OpenRouter,
 anything else → Google AI Studio direct. `DW_MODEL` overrides the model slug.
@@ -161,14 +173,23 @@ deterministic adjudicator.
 
 ## 5. Current verified state
 
-Last full run: 156 records → 1,158-node graph → 12 verified →
-**1 discrepancy, 5 abstained, 6 matched**, 9 contradictions.
+Last full run (BUDGET=25): 156 records → 1,158-node graph (FalkorDB) →
+**2 discrepancies, 10 abstentions**, 9 contradictions.
 
-The discrepancy is real and checkable on a phone:
+Both discrepancies are structural — found by digit-count arithmetic, no model
+involved, so they cannot be false positives:
 
-> **Meals on Wheels of Alameda County** — stored phone `5106544000105` (a number
-> with the extension jammed onto the end). Their live site shows `510.777.9560`.
-> Quote and source URL attached.
+> **MKL Rehab – Addiction Treatment Helpline** — stored `94410046`. Eight digits.
+> Cannot be dialled.
+> **Oakland Healthcare & Wellness** — stored `02508000`. Same fault.
+
+Corpus-wide: **24 of 189 stored phone numbers (13%) are not dialable as stored** —
+20 truncated below 10 digits — across 19 of 138 approved listings.
+
+Every model-adjudicated case in this run came back *abstain*, including a number
+that turned out to be a Zoom meeting ID. That is the intended behaviour: the cheap
+structural check carries the confident findings, the model handles judgement and
+says so when it can't.
 
 ---
 
@@ -180,8 +201,10 @@ The discrepancy is real and checkable on a phone:
   gathers, the model judges.
 - **The Gemini/OpenRouter path is not smoke-tested against a live key.** Run it
   once before demoing, not during.
-- **`notify/spectrum.ts` is scaffolding**, with unverified API signatures. The
-  dry run is real; the integration is not.
+- **iMessage has never delivered a message.** Auth works, the provider is enabled,
+  the recipient is allowlisted — the shared-line pool still refuses with "Target
+  not allowed for this project". Account provisioning, not our code. The terminal
+  and web transports work with no credentials at all.
 - **Small sample.** 156 of 1,759 resources. The finding is a sample, not a census.
 
 ---
