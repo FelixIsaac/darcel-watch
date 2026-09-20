@@ -36,7 +36,17 @@ Run `BUDGET=25 .venv/bin/python run.py`, `.venv/bin/python freshness.py`,
 | Agent false positives | **2 of 7 discrepancies** (pre-fix) | hand-audited 80 listings |
 | Sites publishing a sitemap | **49 of 60 (81%)**, 32 declared in `robots.txt` | live probe, random sample |
 | Sites carrying `<lastmod>` | 39 of 60 (65%) | same |
-| Jev cost per organisation | **$0.000316**, ~1.3s → **~$0.26** for all 813 | 12 orgs, live pricing |
+| Claims extracted per organisation | **40.7 average** (Building Futures: 19, vs 2 from templates) | 6 orgs, cold run |
+| Judgment cost per organisation | **$0.002927** → **$2.38** for all 813 | 6 orgs, live pricing, extraction cached |
+| Cold vs warm run, 6 orgs | 50s cold (extraction runs) → 7s warm | same |
+
+> **Do not quote a single total cost figure without this caveat.** $2.38 is the
+> *judgment* cost only. Extraction (Gemini, one pass per record version) is a
+> separate, one-time cost and is **not instrumented** — `extract.py` does not
+> record token usage. Say "**under $5 to check all 813 listings**", which is
+> conservative and defensible, or quote $2.38 and name it as judgment only.
+> An earlier draft said $1.44; that was extrapolated from one atypical
+> organisation with half the average claim count. Retired.
 
 ### Calibration — held out, `calibrate.py`
 
@@ -56,6 +66,21 @@ work. Rows the oracle cannot decide are **excluded**, not guessed.
 **This measures faithfulness, not factuality** — whether the judge reads the page
 correctly, not whether the directory is right about the world. A phone number can
 be correct and simply unpublished. Say it that way.
+
+### Question formulation — `experiment.py`, same 444 rows
+
+| Formulation | AUROC | ECE | Safe contradictions @≥0.99 |
+|---|---|---|---|
+| Choice, prose criteria | 0.992 | 0.045 | 14 (0 wrong) |
+| Choice, structured state | 0.987 | 0.046 | 17 (0 wrong) |
+| **Choice, structured criteria** *(adopted)* | 0.989 | 0.046 | **25 (0 wrong)** |
+| Score primitive | **0.918** | **0.168** | 6 (0 wrong) |
+| Two independent nouls | 0.983 | 0.032 | **0** — cannot accuse at all; at ≥0.90 flags 14, **5 wrong** |
+
+Three conclusions, all measured on our data and not generalisable beyond it:
+`Score` is the wrong primitive for a categorical relation; structured **criteria**
+are the biggest single win; structured **state** gained nothing here, because our
+state is one blob of page text with no relational structure to preserve.
 
 ## B. Verified in a browser, on the live site
 
@@ -121,3 +146,11 @@ why the index reports 36.2: almost nothing carries evidence stronger than
 
 This is a smaller and more accurate claim than the one this project started with.
 It is also the only one that survives checking.
+
+## G. External facts cited in posts
+
+| Claim | Source |
+|---|---|
+| robots.txt / Robots Exclusion Protocol dates from **1994** | [RFC 9309](https://www.rfc-editor.org/rfc/rfc9309.html): "originally defined by Martijn Koster in 1994" |
+| Sitemaps protocol — "mid-2000s" | sitemaps.org gives only "Sitemap 0.90" and a 2020 page-update date. **A specific year could not be confirmed from the vendor page — do not assert one.** |
+| Jev announced 15 September 2026, RLCD training, ~68% on TypeSafe's own 4-workflow benchmark | typesafe.ai blog — **their claims, cite as theirs** |
